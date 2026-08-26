@@ -5,3 +5,10 @@ npm-debug.log*
 node_modules/
 .env
 .env.local
+cat > .gitignore <<'EOF'
+node_modules/
+.next/
+.env
+.env.local
+.env.*.local
+EOF
