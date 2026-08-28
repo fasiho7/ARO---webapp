@@ -223,13 +223,19 @@ async function finalizeIfExpired(store, row, now) {
   }
   const questions = loadSessionQuestions(row);
   const answers = parseAnswers(row.draft_answers);
-  const result = scoreQuiz(questions, answers);
+  const result = await scoreQuizAsync(
+    questions,
+    answers,
+    isJudge0Configured() ? execute : null,
+  );
   return store.update(row.id, {
     status: "expired",
     submitted_at: new Date(now).toISOString(),
     answers,
     score: result.score,
     percentage: result.percentage,
+    grading_status: result.gradingStatus,
+    result_review: result.review,
   });
 }
 
@@ -259,8 +265,12 @@ function publicInProgress(row, questions, now) {
 }
 
 function publicResult(row, questions) {
-  const answers = parseAnswers(row.answers);
-  const scored = scoreQuiz(questions, answers);
+  const fallback = scoreQuiz(questions, parseAnswers(row.answers));
+  const graded = row.grading_status === "graded";
+  const review = Array.isArray(row.result_review) ? row.result_review : fallback.review;
+  const total = questions.length;
+  const score = graded && Number.isFinite(Number(row.score)) ? Number(row.score) : null;
+  const percentage = graded && row.percentage != null ? Number(row.percentage) : null;
   const started = new Date(row.started_at).getTime();
   const ended = new Date(row.submitted_at ?? row.expires_at).getTime();
   const usedSeconds = Math.max(0, Math.round((ended - started) / 1000));
@@ -277,13 +287,14 @@ function publicResult(row, questions) {
     submittedAt: row.submitted_at,
     expiresAt: row.expires_at,
     status: row.status,
-    score: scored.score,
-    total: scored.total,
-    wrong: scored.wrong,
-    percentage: scored.percentage,
+    score,
+    total,
+    wrong: score == null ? null : total - score,
+    percentage,
+    gradingStatus: graded ? "graded" : "ungraded",
     timeUsedSeconds: usedSeconds,
-    feedback: feedbackForPercentage(scored.percentage),
-    review: scored.review,
+    feedback: graded ? feedbackForPercentage(percentage) : "Submission could not be graded because code execution was unavailable.",
+    review,
   };
 }
 
@@ -410,6 +421,15 @@ function createQuizService(storeFactory = defaultQuizStore) {
     return publicResult(row, questions);
   }
 
+  async function hasActiveQuiz(userId, now = Date.now()) {
+    const db = store();
+    for (const row of await db.listByUser(userId)) {
+      const current = await finalizeIfExpired(db, row, now);
+      if (current.status === "in_progress") return true;
+    }
+    return false;
+  }
+
   async function saveProgress(userId, quizId, rawAnswers, now = Date.now()) {
     const db = store();
     let row = await db.findById(quizId);
@@ -496,6 +516,8 @@ function createQuizService(storeFactory = defaultQuizStore) {
       draft_answers: answers,
       score: result.score,
       percentage: result.percentage,
+      grading_status: result.gradingStatus,
+      result_review: result.review,
     });
     return publicResult(row, questions);
   }
@@ -555,6 +577,7 @@ function createQuizService(storeFactory = defaultQuizStore) {
     getOverview,
     createQuiz,
     getQuiz,
+    hasActiveQuiz,
     saveProgress,
     runQuizCode,
     recordIntegrityEvents,

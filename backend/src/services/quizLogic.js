@@ -181,29 +181,18 @@ function selectQuestions(bank, options, random = Math.random) {
 }
 
 function publicQuestion(item) {
-  if (item.type === "coding") {
-    return {
-      id: item.id,
-      type: "coding",
-      topic: item.topic,
-      subtopic: item.subtopic,
-      difficulty: item.difficulty,
-      question: item.question,
-      title: item.title ?? item.question,
-      problemStatement: item.problemStatement ?? item.question,
-      starterCode: item.starterCode ?? "# Write your solution here\n",
-      sampleCases: item.sampleCases ?? [],
-      language: item.language ?? "python",
-    };
-  }
   return {
     id: item.id,
-    type: "mcq",
+    type: "coding",
     topic: item.topic,
     subtopic: item.subtopic,
     difficulty: item.difficulty,
     question: item.question,
-    options: item.options,
+    title: item.title ?? item.question,
+    problemStatement: item.problemStatement ?? item.question,
+    starterCode: item.starterCode ?? "# Write your solution here\n",
+    sampleCases: item.sampleCases ?? [],
+    language: item.language ?? "python",
   };
 }
 
@@ -231,12 +220,7 @@ function normalizeAnswers(raw, questionIds) {
     if (!allowed.has(questionId)) {
       continue;
     }
-    if (typeof value === "number") {
-      const index = Number(value);
-      if (Number.isInteger(index) && index >= 0 && index <= 3) {
-        answers[questionId] = index;
-      }
-    } else if (typeof value === "string") {
+    if (typeof value === "string") {
       answers[questionId] = { code: value, language: "python" };
     } else if (value && typeof value === "object") {
       if (typeof value.code === "string") {
@@ -244,8 +228,6 @@ function normalizeAnswers(raw, questionIds) {
           code: value.code,
           language: typeof value.language === "string" ? value.language : "python",
         };
-      } else if (Number.isInteger(value.optionIndex)) {
-        answers[questionId] = value.optionIndex;
       }
     }
   }
@@ -255,85 +237,53 @@ function normalizeAnswers(raw, questionIds) {
 const { outputsMatch } = require("../utils/output");
 
 async function scoreQuizAsync(questions, answers, executor) {
+  if (typeof executor !== "function") {
+    return ungradedResult(questions, answers);
+  }
   let correct = 0;
   const review = [];
 
   for (const item of questions) {
-    if (item.type === "coding") {
-      const ansObj =
-        Object.prototype.hasOwnProperty.call(answers, item.id) && answers[item.id]
-          ? typeof answers[item.id] === "string"
-            ? { code: answers[item.id], language: item.language ?? "python" }
-            : answers[item.id]
-          : null;
+    const ansObj = Object.prototype.hasOwnProperty.call(answers, item.id)
+      ? answers[item.id]
+      : null;
+    const code = ansObj?.code ?? null;
+    const lang = ansObj?.language ?? item.language ?? "python";
+    const hiddenTests = item.hiddenTests ?? [];
+    let passedTests = 0;
 
-      const code = ansObj?.code ?? null;
-      const lang = ansObj?.language ?? item.language ?? "python";
-      const hiddenTests = item.hiddenTests ?? [];
-      let passedTests = 0;
-
-      if (code && code.trim().length > 0 && hiddenTests.length > 0) {
-        for (const test of hiddenTests) {
-          if (typeof executor === "function") {
-            try {
-              const res = await executor({ language: lang, sourceCode: code, stdin: test.input });
-              if (res.status === "accepted" && outputsMatch(res.stdout, test.expectedOutput)) {
-                passedTests += 1;
-              }
-            } catch {
-              // Test execution failed
-            }
-          } else {
-            // Fallback basic evaluation
-            if (code.includes(test.expectedOutput.trim())) {
-              passedTests += 1;
-            }
-          }
+    if (code && code.trim().length > 0 && hiddenTests.length > 0) {
+      for (const test of hiddenTests) {
+        let res;
+        try {
+          res = await executor({ language: lang, sourceCode: code, stdin: test.input });
+        } catch {
+          return ungradedResult(questions, answers);
+        }
+        if (res.status === "system_error") {
+          return ungradedResult(questions, answers);
+        }
+        if (res.status === "accepted" && outputsMatch(res.stdout, test.expectedOutput)) {
+          passedTests += 1;
         }
       }
-
-      const isCorrect = hiddenTests.length > 0 && passedTests === hiddenTests.length;
-      if (isCorrect) {
-        correct += 1;
-      }
-
-      review.push({
-        id: item.id,
-        type: "coding",
-        topic: item.topic,
-        subtopic: item.subtopic,
-        difficulty: item.difficulty,
-        question: item.question,
-        title: item.title ?? item.question,
-        yourCode: code,
-        passedTests,
-        totalTests: hiddenTests.length,
-        isCorrect,
-      });
-    } else {
-      const selected =
-        Object.prototype.hasOwnProperty.call(answers, item.id) &&
-        Number.isInteger(answers[item.id])
-          ? answers[item.id]
-          : null;
-      const isCorrect = selected === item.correctAnswer;
-      if (isCorrect) {
-        correct += 1;
-      }
-      review.push({
-        id: item.id,
-        type: "mcq",
-        topic: item.topic,
-        subtopic: item.subtopic,
-        difficulty: item.difficulty,
-        question: item.question,
-        options: item.options,
-        yourAnswer: selected,
-        correctAnswer: item.correctAnswer,
-        explanation: item.explanation,
-        isCorrect,
-      });
     }
+
+    const isCorrect = hiddenTests.length > 0 && passedTests === hiddenTests.length;
+    if (isCorrect) correct += 1;
+    review.push({
+      id: item.id,
+      type: "coding",
+      topic: item.topic,
+      subtopic: item.subtopic,
+      difficulty: item.difficulty,
+      question: item.question,
+      title: item.title ?? item.question,
+      yourCode: code,
+      passedTests,
+      totalTests: hiddenTests.length,
+      isCorrect,
+    });
   }
 
   const total = questions.length;
@@ -344,65 +294,38 @@ async function scoreQuizAsync(questions, answers, executor) {
     wrong: total - correct,
     percentage,
     review,
+    gradingStatus: "graded",
   };
 }
 
 function scoreQuiz(questions, answers) {
-  // Sync fallback helper
-  let correct = 0;
+  return ungradedResult(questions, answers);
+}
+
+function ungradedResult(questions, answers) {
   const review = questions.map((item) => {
-    if (item.type === "coding") {
-      const ansObj =
-        Object.prototype.hasOwnProperty.call(answers, item.id) && answers[item.id]
-          ? typeof answers[item.id] === "string"
-            ? { code: answers[item.id], language: item.language ?? "python" }
-            : answers[item.id]
-          : null;
-      const code = ansObj?.code ?? "";
-      const isCorrect = code.trim().length > 0;
-      if (isCorrect) correct += 1;
-      return {
-        id: item.id,
-        type: "coding",
-        topic: item.topic,
-        subtopic: item.subtopic,
-        difficulty: item.difficulty,
-        question: item.question,
-        yourCode: code,
-        isCorrect,
-      };
-    }
-    const selected =
-      Object.prototype.hasOwnProperty.call(answers, item.id) &&
-      Number.isInteger(answers[item.id])
-        ? answers[item.id]
-        : null;
-    const isCorrect = selected === item.correctAnswer;
-    if (isCorrect) {
-      correct += 1;
-    }
+    const answer = answers?.[item.id];
     return {
       id: item.id,
-      type: "mcq",
+      type: "coding",
       topic: item.topic,
       subtopic: item.subtopic,
       difficulty: item.difficulty,
       question: item.question,
-      options: item.options,
-      yourAnswer: selected,
-      correctAnswer: item.correctAnswer,
-      explanation: item.explanation,
-      isCorrect,
+      title: item.title ?? item.question,
+      yourCode: answer?.code ?? null,
+      passedTests: null,
+      totalTests: item.hiddenTests?.length ?? 0,
+      isCorrect: false,
     };
   });
-  const total = questions.length;
-  const percentage = total === 0 ? 0 : Math.round((correct / total) * 10000) / 100;
   return {
-    score: correct,
-    total,
-    wrong: total - correct,
-    percentage,
+    score: null,
+    total: questions.length,
+    wrong: null,
+    percentage: null,
     review,
+    gradingStatus: "ungraded",
   };
 }
 
@@ -522,6 +445,7 @@ module.exports = {
   normalizeAnswers,
   scoreQuiz,
   scoreQuizAsync,
+  ungradedResult,
   feedbackForPercentage,
   isPastExpiry,
   remainingSeconds,

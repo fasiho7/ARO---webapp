@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { AuthLoadingScreen } from "@/components/auth/AuthLoadingScreen";
 import { AppHeader } from "@/components/layout/AppHeader";
+import { DevPlanSwitcher } from "@/components/ui/DevPlanSwitcher";
 import { isNavActive, mobileNav } from "@/components/layout/nav";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { cn } from "@/lib/cn";
@@ -13,6 +14,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { status, configured } = useAuth();
+  const visibleMobileNav = pathname.startsWith("/quiz/")
+    ? mobileNav.filter((item) => item.href !== "/ai-tutor")
+    : mobileNav;
 
   useEffect(() => {
     if (!configured) {
@@ -30,9 +34,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen w-full max-w-none flex-col">
       <AppHeader />
-      <main className="wrap w-full max-w-none flex-1 pt-2 pb-20">{children}</main>
+      <main className="wrap w-full max-w-none flex-1 pt-2 pb-20">
+        <DevPlanSwitcher />
+        {children}
+      </main>
       <nav className="sticky bottom-0 z-30 flex gap-1 overflow-x-auto border-t border-line bg-void/90 px-2 py-2 md:hidden">
-        {mobileNav.map((item) => {
+        {visibleMobileNav.map((item) => {
           const Icon = item.icon;
           const active = isNavActive(pathname, item.href);
           const label =

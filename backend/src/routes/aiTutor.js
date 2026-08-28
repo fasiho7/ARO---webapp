@@ -1,7 +1,7 @@
 const { Router } = require("express");
-const optionalAiUser = require("../middleware/optionalAiUser");
 const attachPlan = require("../middleware/attachPlan");
 const aiTutorGuard = require("../middleware/aiTutorGuard");
+const blockActiveQuizTutor = require("../middleware/blockActiveQuizTutor");
 const { MAX_MESSAGE_CHARS } = require("../config/ai");
 const { completeChat, USER_ERROR } = require("../services/aiTutorService");
 const { HttpError } = require("../utils/httpError");
@@ -9,7 +9,7 @@ const { assertAiTutorAccess } = require("../services/accessControl");
 
 const aiTutorRouter = Router();
 
-aiTutorRouter.post("/", attachPlan, optionalAiUser, aiTutorGuard, async (req, res, next) => {
+aiTutorRouter.post("/", attachPlan, blockActiveQuizTutor, aiTutorGuard, async (req, res, next) => {
   try {
     assertAiTutorAccess(req.plan);
     const message = req.body?.message;

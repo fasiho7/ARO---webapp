@@ -4,10 +4,14 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 export async function bearerAuthHeaders(): Promise<Record<string, string>> {
   const headers: Record<string, string> = {};
 
-  if (process.env.NODE_ENV === "development" && typeof window !== "undefined") {
+  if (
+    process.env.NODE_ENV === "development" &&
+    process.env.NEXT_PUBLIC_ENABLE_DEV_PRO_TESTING === "true" &&
+    typeof window !== "undefined"
+  ) {
     const devUser = sessionStorage.getItem("aro-dev-user");
     if (devUser === "pro" || devUser === "free") {
-      headers["x-dev-user"] = devUser;
+      headers["x-aro-dev-test-plan"] = devUser;
     }
   }
 

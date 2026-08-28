@@ -20,8 +20,6 @@ import {
   type QuizSessionPayload,
 } from "@/lib/quizApi";
 
-const LETTERS = ["A", "B", "C", "D"];
-
 function storageKey(id: string) {
   return `aro-quiz-answers:${id}`;
 }
@@ -286,7 +284,6 @@ export function QuizSession({ quizId }: { quizId: string }) {
     );
   }
 
-  const isCoding = current.type === "coding";
   const currentAnsVal = answers[current.id];
   const currentCode =
     typeof currentAnsVal === "object"
@@ -351,12 +348,11 @@ export function QuizSession({ quizId }: { quizId: string }) {
       </div>
 
       <p className="font-mono text-[11px] tracking-wide text-muted uppercase">
-        Question {index + 1} of {questions.length} ({isCoding ? "Coding Exam Problem" : "Multiple Choice"})
+        Coding problem {index + 1} of {questions.length}
       </p>
 
       {/* Problem View */}
-      {isCoding ? (
-        <div className="mt-4 grid gap-6 lg:grid-cols-12">
+      <div className="mt-4 grid gap-6 lg:grid-cols-12">
           {/* Problem Statement */}
           <div className="lg:col-span-5 flex flex-col gap-4">
             <Card>
@@ -453,34 +449,6 @@ export function QuizSession({ quizId }: { quizId: string }) {
             />
           </div>
         </div>
-      ) : (
-        /* MCQ View */
-        <div className="mt-4">
-          <h2 className="text-lg leading-7 sm:text-xl">{current.question}</h2>
-          <div className="mt-5 grid gap-2">
-            {current.options?.map((option, optionIndex) => {
-              const selected = answers[current.id] === optionIndex;
-              return (
-                <button
-                  key={optionIndex}
-                  type="button"
-                  onClick={() =>
-                    setAnswers((prev) => ({ ...prev, [current.id]: optionIndex }))
-                  }
-                  className={`min-h-12 rounded-[2px] border px-3 py-3 text-left text-sm transition sm:px-4 ${
-                    selected
-                      ? "border-gold bg-gold/10"
-                      : "border-line bg-surface hover:border-gold/40"
-                  }`}
-                >
-                  <span className="mr-3 font-mono text-gold">{LETTERS[optionIndex]}</span>
-                  {option}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* Navigation Buttons */}
       <div className="mt-6 flex flex-wrap gap-3">
@@ -516,11 +484,7 @@ export function QuizSession({ quizId }: { quizId: string }) {
             const val = answers[item.id];
             const answered =
               val != null &&
-              (item.type === "coding"
-                ? typeof val === "object"
-                  ? val.code.trim().length > 0
-                  : String(val).trim().length > 0
-                : true);
+              typeof val === "object" && val.code.trim().length > 0;
             const currentItem = itemIndex === index;
             return (
               <button
@@ -576,6 +540,7 @@ export function QuizSession({ quizId }: { quizId: string }) {
 
 function QuizResultView({ payload }: { payload: QuizSessionPayload }) {
   const review = payload.review ?? [];
+  const graded = payload.gradingStatus !== "ungraded";
   const percentage = payload.percentage ?? 0;
   const ring = Math.max(0, Math.min(100, percentage));
 
@@ -584,29 +549,31 @@ function QuizResultView({ payload }: { payload: QuizSessionPayload }) {
       <p className="font-mono text-[11px] tracking-wide text-gold uppercase">
         {payload.status === "expired" ? "Time expired" : "Exam complete"}
       </p>
-      <h1 className="display mt-2 text-4xl sm:text-5xl">Your Exam Score</h1>
+      <h1 className="display mt-2 text-4xl sm:text-5xl">
+        {graded ? "Your Exam Score" : "Exam Submitted"}
+      </h1>
       <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-center">
-        <div
-          className="grid size-36 place-items-center rounded-full"
-          style={{
-            background: `conic-gradient(var(--gold) ${ring}%, rgb(243 236 228 / 0.12) 0)`,
-          }}
-        >
-          <div className="grid size-[7.5rem] place-items-center rounded-full bg-void">
-            <span className="font-mono text-2xl text-gold">{Math.round(percentage)}%</span>
+        {graded ? (
+          <div
+            className="grid size-36 place-items-center rounded-full"
+            style={{
+              background: `conic-gradient(var(--gold) ${ring}%, rgb(243 236 228 / 0.12) 0)`,
+            }}
+          >
+            <div className="grid size-[7.5rem] place-items-center rounded-full bg-void">
+              <span className="font-mono text-2xl text-gold">{Math.round(percentage)}%</span>
+            </div>
           </div>
-        </div>
+        ) : null}
         <div>
-          <p className="text-3xl font-medium">
-            {payload.score} / {payload.total}
-          </p>
+          {graded ? <p className="text-3xl font-medium">{payload.score} / {payload.total}</p> : null}
           <p className="mt-1 text-lg text-muted">{payload.feedback}</p>
         </div>
       </div>
 
       <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Fact label="Score" value={String(payload.score ?? 0)} />
-        <Fact label="Wrong" value={String(payload.wrong ?? 0)} />
+        <Fact label="Score" value={graded ? String(payload.score ?? 0) : "Ungraded"} />
+        <Fact label="Wrong" value={graded ? String(payload.wrong ?? 0) : "—"} />
         <Fact
           label="Time used"
           value={formatClock(payload.timeUsedSeconds ?? 0)}
@@ -643,8 +610,6 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 function ReviewCard({ item, index }: { item: QuizReviewItem; index: number }) {
-  const isCoding = item.type === "coding";
-
   return (
     <Card>
       <div className="flex flex-wrap items-center gap-2">
@@ -652,58 +617,25 @@ function ReviewCard({ item, index }: { item: QuizReviewItem; index: number }) {
         <Badge tone={item.isCorrect ? "success" : "danger"}>
           {item.isCorrect ? "Passed" : "Failed"}
         </Badge>
-        <span className="font-mono text-xs text-muted">
-          ({isCoding ? "Coding" : "MCQ"})
-        </span>
+        <span className="font-mono text-xs text-muted">(Coding)</span>
       </div>
       <p className="mt-3 text-sm leading-6 sm:text-base font-medium">{item.question}</p>
 
-      {isCoding ? (
-        <div className="mt-3">
-          <p className="font-mono text-xs text-muted">Submitted Code:</p>
-          {item.yourCode ? (
-            <pre className="mt-1.5 rounded bg-[#1e1e1e] p-3 font-mono text-xs text-[#d4d4d4] overflow-x-auto border border-[#2d2d2d]">
-              {item.yourCode}
-            </pre>
-          ) : (
-            <p className="mt-1 text-sm text-muted">No code submitted for this question.</p>
-          )}
-          {item.totalTests != null ? (
-            <p className="mt-2 font-mono text-xs text-muted">
-              Test cases passed: {item.passedTests} / {item.totalTests}
-            </p>
-          ) : null}
-        </div>
-      ) : (
-        <ul className="mt-3 space-y-1 text-sm">
-          {item.options?.map((option, optionIndex) => {
-            const yours = item.yourAnswer === optionIndex;
-            const correct = item.correctAnswer === optionIndex;
-            return (
-              <li
-                key={optionIndex}
-                className={
-                  correct
-                    ? "text-sage"
-                    : yours
-                      ? "text-danger"
-                      : "text-muted"
-                }
-              >
-                {LETTERS[optionIndex]}. {option}
-                {correct ? " — correct" : yours ? " — your answer" : ""}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      {!isCoding && item.yourAnswer == null ? (
-        <p className="mt-2 text-sm text-muted">You did not answer this question.</p>
-      ) : null}
-      {item.explanation ? (
-        <p className="mt-3 text-sm leading-6 text-muted">{item.explanation}</p>
-      ) : null}
+      <div className="mt-3">
+        <p className="font-mono text-xs text-muted">Submitted Code:</p>
+        {item.yourCode ? (
+          <pre className="mt-1.5 overflow-x-auto rounded border border-[#2d2d2d] bg-[#1e1e1e] p-3 font-mono text-xs text-[#d4d4d4]">
+            {item.yourCode}
+          </pre>
+        ) : (
+          <p className="mt-1 text-sm text-muted">No code submitted for this question.</p>
+        )}
+        {item.totalTests != null ? (
+          <p className="mt-2 font-mono text-xs text-muted">
+            Test cases passed: {item.passedTests ?? "—"} / {item.totalTests}
+          </p>
+        ) : null}
+      </div>
     </Card>
   );
 }

@@ -9,6 +9,12 @@ accessRouter.get("/me", attachPlan, (req, res) => {
   res.json({
     success: true,
     ...entitlements(req.plan),
+    devTesting: {
+      enabled:
+        process.env.NODE_ENV === "development" &&
+        process.env.ENABLE_DEV_PRO_TESTING === "true",
+      active: Boolean(req.devTesting),
+    },
   });
 });
 

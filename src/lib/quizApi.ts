@@ -22,12 +22,11 @@ export type QuizTopicOption = {
 
 export type QuizPublicQuestion = {
   id: string;
-  type?: "mcq" | "coding";
+  type: "coding";
   topic: string;
   subtopic: string;
   difficulty: string;
   question: string;
-  options?: string[];
   title?: string;
   problemStatement?: string;
   starterCode?: string;
@@ -35,7 +34,7 @@ export type QuizPublicQuestion = {
   language?: string;
 };
 
-export type QuizAnswerValue = number | { code: string; language?: string };
+export type QuizAnswerValue = { code: string; language?: string };
 
 export type QuizOverview = {
   success: true;
@@ -82,10 +81,11 @@ export type QuizSessionPayload = {
   reduced?: boolean;
   available?: number;
   recommendedTimeLimit?: number;
-  score?: number;
+  score?: number | null;
   total?: number;
-  wrong?: number;
-  percentage?: number;
+  wrong?: number | null;
+  percentage?: number | null;
+  gradingStatus?: "graded" | "ungraded";
   timeUsedSeconds?: number;
   feedback?: string;
   submittedAt?: string | null;
@@ -94,18 +94,14 @@ export type QuizSessionPayload = {
 
 export type QuizReviewItem = {
   id: string;
-  type?: "mcq" | "coding";
+  type: "coding";
   topic: string;
   subtopic: string;
   difficulty: string;
   question: string;
-  options?: string[];
-  yourAnswer?: number | null;
-  correctAnswer?: number;
-  explanation?: string;
   title?: string;
   yourCode?: string | null;
-  passedTests?: number;
+  passedTests?: number | null;
   totalTests?: number;
   isCorrect: boolean;
 };

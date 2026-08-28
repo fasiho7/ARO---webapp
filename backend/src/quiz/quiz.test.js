@@ -5,6 +5,7 @@ const {
   selectQuestions,
   publicQuestion,
   scoreQuiz,
+  scoreQuizAsync,
   normalizeAnswers,
   assertCanCreate,
   isPastExpiry,
@@ -22,14 +23,9 @@ async function run() {
   assert.equal(unique(QUIZ_QUESTIONS.map((item) => item.id)), true, "question ids");
   assert.ok(QUIZ_QUESTIONS.length >= 10, "question bank size");
   for (const item of QUIZ_QUESTIONS) {
-    if (item.type !== "coding") {
-      assert.equal(item.options.length, 4);
-      assert.ok(item.correctAnswer >= 0 && item.correctAnswer <= 3);
-      assert.ok(item.explanation.length > 8);
-    } else {
-      assert.ok(item.starterCode.length > 0);
-      assert.ok(item.hiddenTests.length > 0);
-    }
+    assert.equal(item.type, "coding");
+    assert.ok(item.starterCode.length > 0);
+    assert.ok(item.hiddenTests.length > 0);
   }
 
   const ids = new Set();
@@ -84,18 +80,30 @@ async function run() {
     [sample],
     { [sample.id]: { code: "print('hello')" }, ignored: 99 },
   );
-  assert.equal(scored.score, 1);
-  assert.equal(scored.percentage, 100);
+  assert.equal(scored.score, null);
+  assert.equal(scored.percentage, null);
+  assert.equal(scored.gradingStatus, "ungraded");
+  let hiddenTestIndex = 0;
+  const graded = await scoreQuizAsync(
+    [sample],
+    { [sample.id]: { code: "print('hello')", language: "python" } },
+    async () => ({
+      status: "accepted",
+      stdout: sample.hiddenTests[hiddenTestIndex++].expectedOutput,
+    }),
+  );
+  assert.equal(graded.score, 1);
+  assert.equal(graded.gradingStatus, "graded");
   const wrong = scoreQuiz([sample], { [sample.id]: "" });
-  assert.equal(wrong.score, 0);
+  assert.equal(wrong.score, null);
   assert.equal(feedbackForPercentage(92), "Excellent");
   assert.equal(feedbackForPercentage(80), "Great work");
   assert.equal(feedbackForPercentage(60), "Keep practicing");
   assert.equal(feedbackForPercentage(40), "Review the fundamentals");
 
   assert.throws(() => normalizeAnswers("nope", ["a"]), /object/);
-  const cleaned = normalizeAnswers({ a: 1, extra: 0 }, ["a"]);
-  assert.deepEqual(cleaned, { a: 1 });
+  const cleaned = normalizeAnswers({ a: { code: "print(1)" }, extra: 0 }, ["a"]);
+  assert.deepEqual(cleaned, { a: { code: "print(1)", language: "python" } });
 
   assert.equal(isPastExpiry(new Date(0).toISOString(), 20_000, 15_000), true);
   assert.equal(isPastExpiry(Date.now() + 60_000, Date.now(), 15_000), false);
@@ -114,6 +122,7 @@ async function run() {
   });
   assert.equal(first.success, true);
   assert.equal(first.questions.length, 5);
+  assert.equal(await quiz.hasActiveQuiz(freeUser), true);
   assert.equal(JSON.stringify(first).includes("correctAnswer"), false);
   ids.add(first.quizId);
 
@@ -153,6 +162,7 @@ async function run() {
   assert.equal(result.total, 5);
   assert.ok(Array.isArray(result.review));
   assert.equal(result.review[0].type, "coding");
+  assert.equal(await quiz.hasActiveQuiz(freeUser), false);
 
   await assert.rejects(
     () =>
@@ -208,7 +218,7 @@ async function run() {
   assert.equal(history.items.length, 2);
 
   const analytics = await proQuiz.getAnalytics(proUser, "pro");
-  assert.equal(analytics.quizzesCompleted, 2);
+  assert.equal(analytics.quizzesCompleted, 0);
   assert.ok(analytics.bestScore >= analytics.averageScore);
   assert.ok(Array.isArray(analytics.topicPerformance));
 
@@ -227,7 +237,8 @@ async function run() {
     t0 + 5 * 60 * 1000 + 16_000,
   );
   assert.equal(late.status, "expired");
-  assert.ok(typeof late.score === "number");
+  assert.equal(late.gradingStatus, "ungraded");
+  assert.equal(late.score, null);
 
   const resumed = createQuizService(createMemoryStore());
   const open = await resumed.createQuiz("resume", "pro", {
@@ -237,9 +248,11 @@ async function run() {
     questionCount: 5,
     timeLimit: 10,
   });
-  await resumed.saveProgress("resume", open.quizId, { [open.questions[0].id]: 2 });
+  await resumed.saveProgress("resume", open.quizId, {
+    [open.questions[0].id]: { code: "print(2)", language: "python" },
+  });
   const again = await resumed.getQuiz("resume", open.quizId);
-  assert.equal(again.draftAnswers[open.questions[0].id], 2);
+  assert.equal(again.draftAnswers[open.questions[0].id].code, "print(2)");
 
   const analyticsEmpty = computeAnalytics([]);
   assert.equal(analyticsEmpty.quizzesCompleted, 0);

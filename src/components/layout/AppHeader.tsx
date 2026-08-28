@@ -60,6 +60,9 @@ export function AppHeader() {
   }
 
   const coord = coordFor(pathname);
+  const visiblePrimaryNav = pathname.startsWith("/quiz/")
+    ? primaryNav.filter((item) => item.href !== "/ai-tutor")
+    : primaryNav;
 
   return (
     <header className="sticky top-0 z-50 bg-gradient-to-b from-void from-60% to-transparent py-[18px] sm:py-[22px]">
@@ -73,7 +76,7 @@ export function AppHeader() {
           </Link>
 
           <div className="hidden items-center gap-5 lg:flex xl:gap-7">
-            {primaryNav.map((item) => {
+            {visiblePrimaryNav.map((item) => {
               const active = isNavActive(pathname, item.href);
               return (
                 <Link
@@ -188,7 +191,7 @@ export function AppHeader() {
 
         {menuOpen ? (
           <div className="mt-3 space-y-1 rounded-[2px] border border-line bg-surface p-3 lg:hidden">
-            {primaryNav.map((item) => {
+            {visiblePrimaryNav.map((item) => {
               const active = isNavActive(pathname, item.href);
               return (
                 <Link

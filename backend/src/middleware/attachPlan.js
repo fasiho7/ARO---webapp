@@ -21,52 +21,35 @@ function userSupabase(token) {
   });
 }
 
-const isDev = process.env.NODE_ENV === "development";
-const isDevTesting = isDev && process.env.ENABLE_DEV_PRO_TESTING === "true";
+function devTestingEnabled() {
+  return (
+    process.env.NODE_ENV === "development" &&
+    process.env.ENABLE_DEV_PRO_TESTING === "true"
+  );
+}
+
+function devTestingUserIds() {
+  return new Set(
+    String(process.env.DEV_PRO_TESTING_USER_IDS ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+}
+
+function requestedDevPlan(req) {
+  const value = req.headers["x-aro-dev-test-plan"];
+  return value === "free" || value === "pro" ? value : null;
+}
 
 async function attachPlan(req, _res, next) {
   req.plan = "free";
   if (req.userId == null) {
     req.userId = null;
   }
+  req.devTesting = false;
 
   const token = readAccessToken(req);
-  const devUserHeader = req.headers["x-dev-user"];
-
-  if (isDevTesting) {
-    let devTarget = null;
-    if (typeof devUserHeader === "string") {
-      devTarget = devUserHeader.trim().toLowerCase();
-    } else if (token === "dev-pro-token") {
-      devTarget = "pro";
-    } else if (token === "dev-free-token") {
-      devTarget = "free";
-    }
-
-    if (devTarget === "pro") {
-      req.userId = "dev-user-pro-id";
-      req.userEmail = "test-pro@aro.local";
-      req.plan = "pro";
-      next();
-      return;
-    }
-
-    if (devTarget === "free") {
-      req.userId = "dev-user-free-id";
-      req.userEmail = "test-free@aro.local";
-      req.plan = "free";
-      next();
-      return;
-    }
-
-    if (!token) {
-      req.userId = "dev-user-free-id";
-      req.userEmail = "test-free@aro.local";
-      req.plan = "free";
-      next();
-      return;
-    }
-  }
 
   if (!token) {
     next();
@@ -75,11 +58,6 @@ async function attachPlan(req, _res, next) {
 
   const client = userSupabase(token);
   if (!client) {
-    if (isDevTesting) {
-      req.userId = "dev-user-free-id";
-      req.userEmail = "test-free@aro.local";
-      req.plan = "free";
-    }
     next();
     return;
   }
@@ -87,11 +65,6 @@ async function attachPlan(req, _res, next) {
   try {
     const { data, error } = await client.auth.getUser(token);
     if (error || !data?.user?.id) {
-      if (isDevTesting) {
-        req.userId = "dev-user-free-id";
-        req.userEmail = "test-free@aro.local";
-        req.plan = "free";
-      }
       next();
       return;
     }
@@ -102,12 +75,13 @@ async function attachPlan(req, _res, next) {
       .eq("id", data.user.id)
       .maybeSingle();
     req.plan = normalizePlan(profile?.plan);
-  } catch {
-    if (isDevTesting) {
-      req.userId = "dev-user-free-id";
-      req.userEmail = "test-free@aro.local";
-      req.plan = "free";
+    const devPlan = requestedDevPlan(req);
+    if (devTestingEnabled() && devPlan && devTestingUserIds().has(req.userId)) {
+      req.plan = devPlan;
+      req.devTesting = true;
     }
+  } catch {
+    // Leave the request unauthenticated; requireAuth decides whether to reject it.
   }
 
   next();
