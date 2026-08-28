@@ -136,6 +136,21 @@ export default function MonacoPane({
     });
 
     if (examMode) {
+      // Layer 1 — override Monaco's internal clipboard action pipeline via addCommand.
+      // This is more reliable than onKeyDown/preventDefault because addCommand replaces
+      // the built-in handler at the command-registry level before Monaco dispatches it.
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {
+        onIntegrityEvent?.("c_shortcut_attempt");
+      });
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {
+        onIntegrityEvent?.("v_shortcut_attempt");
+      });
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {
+        onIntegrityEvent?.("x_shortcut_attempt");
+      });
+
+      // Layer 2 — intercept raw DOM clipboard/context-menu events on the editor DOM node.
+      // Catches browser-level paths (Edit menu, right-click via accessibility tools, drops).
       const domNode = editor.getDomNode();
       if (domNode) {
         const preventAndReport = (e: Event, type: string) => {
@@ -150,32 +165,7 @@ export default function MonacoPane({
         domNode.addEventListener("drop", (e) => preventAndReport(e, "drop_attempt"), true);
         domNode.addEventListener("dragover", (e) => e.preventDefault(), true);
         domNode.addEventListener("contextmenu", (e) => preventAndReport(e, "context_menu_attempt"), true);
-        domNode.addEventListener("keydown", (e: KeyboardEvent) => {
-          if ((e.ctrlKey || e.metaKey) && ["c", "v", "x"].includes(e.key.toLowerCase())) {
-            preventAndReport(e, `${e.key.toLowerCase()}_shortcut_attempt`);
-          }
-        }, true);
       }
-
-      editor.onKeyDown((e) => {
-        const isCtrlOrCmd = e.ctrlKey || e.metaKey;
-        if (
-          isCtrlOrCmd &&
-          (e.keyCode === monaco.KeyCode.KeyC ||
-            e.keyCode === monaco.KeyCode.KeyV ||
-            e.keyCode === monaco.KeyCode.KeyX)
-        ) {
-          e.preventDefault();
-          e.stopPropagation();
-          const keyName =
-            e.keyCode === monaco.KeyCode.KeyC
-              ? "c"
-              : e.keyCode === monaco.KeyCode.KeyV
-                ? "v"
-                : "x";
-          onIntegrityEvent?.(`${keyName}_shortcut_attempt`);
-        }
-      });
     }
 
     requestAnimationFrame(() => {
@@ -247,6 +237,11 @@ export default function MonacoPane({
           suggestOnTriggerCharacters: !examMode,
           snippetSuggestions: examMode ? "none" : "inline",
           wordBasedSuggestions: examMode ? "off" : "matchingDocuments",
+          // Prevent drag-and-drop text movement in exam mode.
+          dragAndDrop: !examMode,
+          dropIntoEditor: { enabled: !examMode },
+          // Prevent Linux middle-click selection-paste in exam mode.
+          selectionClipboard: !examMode,
         }}
       />
     </div>

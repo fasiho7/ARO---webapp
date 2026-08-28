@@ -8,13 +8,10 @@ import { useAuth } from "@/components/providers/AuthProvider";
 export function DevPlanSwitcher() {
   const { user } = useAuth();
   const { plan, devTesting } = usePlan();
-  const [currentPlan, setCurrentPlan] = useState<"free" | "pro">("free");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-    const stored = sessionStorage.getItem("aro-dev-user");
-    if (stored === "pro" || stored === "free") setCurrentPlan(stored);
+    setMounted(true); // eslint-disable-line react-hooks/set-state-in-effect
   }, []);
 
   if (
@@ -28,7 +25,6 @@ export function DevPlanSwitcher() {
 
   function switchPlan(nextPlan: "free" | "pro") {
     sessionStorage.setItem("aro-dev-user", nextPlan);
-    setCurrentPlan(nextPlan);
     window.location.reload();
   }
 

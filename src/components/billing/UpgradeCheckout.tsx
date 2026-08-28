@@ -45,7 +45,7 @@ function paymentStatusLabel(status: PaymentRecord["status"]): string {
 }
 
 export function UpgradeCheckout() {
-  const { profile, refreshProfile, status: authStatus } = useAuth();
+  const { profile, status: authStatus } = useAuth();
   const [catalog, setCatalog] = useState<BillingCatalog | null>(null);
   const [catalogError, setCatalogError] = useState("");
   const [provider, setProvider] = useState<PaymentProviderId | null>(null);

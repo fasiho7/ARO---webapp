@@ -80,7 +80,7 @@ export function CodingProblemView({
   const code = codeByLang[language];
 
   useEffect(() => {
-    setSamples(sampleCases);
+    setSamples(sampleCases); // eslint-disable-line react-hooks/set-state-in-effect
   }, [sampleCases]);
 
   useEffect(() => {

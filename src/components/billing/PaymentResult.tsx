@@ -38,7 +38,7 @@ export function PaymentResult() {
 
   useEffect(() => {
     if (!orderId) {
-      setError("This page does not take payment status from the URL.");
+      setError("This page does not take payment status from the URL."); // eslint-disable-line react-hooks/set-state-in-effect
       return;
     }
     const paymentId = orderId;

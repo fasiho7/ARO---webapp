@@ -86,7 +86,7 @@ export function AdminPayments() {
   }
 
   useEffect(() => {
-    void loadPayments();
+    void loadPayments(); // eslint-disable-line react-hooks/set-state-in-effect
   }, []);
 
   async function signIn() {

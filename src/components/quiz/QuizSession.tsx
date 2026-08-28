@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { CodeEditor } from "@/components/coding/CodeEditor";
-import { CODING_LANGUAGES, type CodingLanguage } from "@/data/coding/types";
+import { type CodingLanguage } from "@/data/coding/types";
 import {
   fetchQuiz,
   formatClock,
@@ -59,7 +59,9 @@ export function QuizSession({ quizId }: { quizId: string }) {
   const integrityQueueRef = useRef<{ type: string; count: number; timestamp: string }[]>([]);
   const autoSubmitRef = useRef(false);
   const answersRef = useRef(answers);
-  answersRef.current = answers;
+  useEffect(() => {
+    answersRef.current = answers;
+  });
 
   const queueIntegrityEvent = useCallback((type: string) => {
     const existing = integrityQueueRef.current.find((e) => e.type === type);
@@ -114,7 +116,7 @@ export function QuizSession({ quizId }: { quizId: string }) {
   useEffect(() => {
     const stored = sessionStorage.getItem("aro-quiz-note");
     if (stored) {
-      setNote(stored);
+      setNote(stored); // eslint-disable-line react-hooks/set-state-in-effect
       sessionStorage.removeItem("aro-quiz-note");
     }
     load().catch((err) => {
@@ -156,6 +158,22 @@ export function QuizSession({ quizId }: { quizId: string }) {
     };
   }, [flushIntegrityEvents, queueIntegrityEvent, payload?.status]);
 
+  async function finish(nextAnswers: Record<string, QuizAnswerValue>) {
+    setSubmitting(true);
+    setConfirmOpen(false);
+    await flushIntegrityEvents();
+    try {
+      const result = await submitQuiz(quizId, nextAnswers);
+      localStorage.removeItem(storageKey(quizId));
+      setPayload(result);
+    } catch (err) {
+      setError(err instanceof QuizApiError ? err.message : "Could not submit the quiz.");
+      autoSubmitRef.current = false;
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   useEffect(() => {
     if (payload?.status !== "in_progress" || !payload.expiresAt) {
       return;
@@ -174,7 +192,7 @@ export function QuizSession({ quizId }: { quizId: string }) {
     tick();
     const id = window.setInterval(tick, 250);
     return () => window.clearInterval(id);
-  }, [payload?.status, payload?.expiresAt]);
+  }, [payload?.status, payload?.expiresAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (payload?.status !== "in_progress") {
@@ -197,22 +215,6 @@ export function QuizSession({ quizId }: { quizId: string }) {
     }, 400);
     return () => window.clearTimeout(timer);
   }, [answers, payload?.status, quizId]);
-
-  async function finish(nextAnswers: Record<string, QuizAnswerValue>) {
-    setSubmitting(true);
-    setConfirmOpen(false);
-    await flushIntegrityEvents();
-    try {
-      const result = await submitQuiz(quizId, nextAnswers);
-      localStorage.removeItem(storageKey(quizId));
-      setPayload(result);
-    } catch (err) {
-      setError(err instanceof QuizApiError ? err.message : "Could not submit the quiz.");
-      autoSubmitRef.current = false;
-    } finally {
-      setSubmitting(false);
-    }
-  }
 
   function toggleFullscreen() {
     if (!document.fullscreenElement) {
