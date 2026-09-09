@@ -57,7 +57,11 @@ export function RoadmapsExplorer({ careers }: { careers: CareerSummary[] }) {
           onChange={setQuery}
           placeholder="Search careers, skills, or tools"
         />
-        <Tabs tabs={filters} value={filter} onChange={setFilter} />
+        <Tabs
+          tabs={filters}
+          value={filter}
+          onChange={(val: string) => setFilter(val as FilterId)}
+        />
       </div>
       {visible.length === 0 ? (
         <EmptyState

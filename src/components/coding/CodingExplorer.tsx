@@ -72,7 +72,7 @@ export function CodingExplorer({ problems }: { problems: Problem[] }) {
       <Tabs
         tabs={difficulties}
         value={difficulty}
-        onChange={setDifficulty}
+        onChange={(val: string) => setDifficulty(val as DiffId)}
         className="mb-3"
       />
       <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
