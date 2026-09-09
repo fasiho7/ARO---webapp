@@ -1,7 +1,8 @@
 import { cookies } from "next/headers";
 import { createHash, timingSafeEqual } from "node:crypto";
 
-const ADMIN_COOKIE = "aro_billing_admin";
+export const ADMIN_COOKIE_NAME = "aro_billing_admin";
+const ADMIN_COOKIE = ADMIN_COOKIE_NAME;
 
 function apiBase(): string {
   return (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000").replace(/\/$/, "");
@@ -62,8 +63,8 @@ export function verifySubmittedSecret(secret: string): boolean {
 export async function proxyAdmin(path: string, init?: RequestInit): Promise<Response> {
   if (!(await hasAdminSession())) {
     return Response.json(
-      { success: false, message: "Admin authorization required." },
-      { status: 401 },
+      { success: false, message: "Forbidden. Valid admin session required." },
+      { status: 403 },
     );
   }
 

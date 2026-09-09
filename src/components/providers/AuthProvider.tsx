@@ -25,6 +25,7 @@ type SignUpInput = {
 
 type AuthContextValue = {
   status: AuthStatus;
+  loading: boolean;
   user: User | null;
   profile: Profile | null;
   configured: boolean;
@@ -166,9 +167,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setProfile(null);
     setStatus("unauthenticated");
-    router.replace("/login");
+    router.replace("/");
     router.refresh();
   }, [router]);
+
 
   const refreshProfile = useCallback(async () => {
     if (!user || !isSupabasePublicConfigured()) {
@@ -204,6 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       status,
+      loading: status === "loading",
       user,
       profile,
       configured,

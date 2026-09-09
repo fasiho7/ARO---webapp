@@ -21,13 +21,18 @@ export async function bearerAuthHeaders(): Promise<Record<string, string>> {
 
   try {
     const supabase = createBrowserSupabaseClient();
+    // proxy.ts (Next.js 16 middleware) refreshes the Supabase cookie before
+    // the page renders, so getSession() always returns a valid, current token.
+    // Using getUser() caused a race: it fires a server round-trip that can
+    // complete after the component useEffect, returning no token on first load
+    // and triggering the backend 401 "Sign in to continue." error on /quiz.
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }
   } catch {
-    // Ignore auth session error
+    // Ignore auth errors — unauthenticated requests proceed without a token.
   }
 
   return headers;

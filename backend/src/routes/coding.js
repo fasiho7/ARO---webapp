@@ -1,4 +1,4 @@
-const { Router } = require("express");
+// const { Router } = require("express");
 const executionGuard = require("../middleware/executionGuard");
 const attachPlan = require("../middleware/attachPlan");
 const { HttpError } = require("../utils/httpError");
@@ -9,10 +9,7 @@ const {
   MAX_STDIN_CHARS,
 } = require("../config/executionLimits");
 const { execute, isConfigured } = require("../services/judge0Service");
-const {
-  extractDryRun,
-  wrapPythonSource,
-} = require("../services/pythonDryRun");
+const { universalDryRun } = require("../services/universalDryRun");
 const {
   PUBLIC_SAMPLE_COUNT,
   getProblemTests,
@@ -163,22 +160,23 @@ codingRouter.post(
   gateBodyProblem(false),
   executionGuard,
   async (req, res, next) => {
-  try {
-    requireJudge0();
-    const problemId =
-      typeof req.body?.problemId === "string" ? req.body.problemId.trim() : "";
-    if (problemId) {
-      assertProblemAccess(req.plan, problemId);
+    try {
+      requireJudge0();
+      const problemId =
+        typeof req.body?.problemId === "string" ? req.body.problemId.trim() : "";
+      if (problemId) {
+        assertProblemAccess(req.plan, problemId);
+      }
+      const language = readLanguage(req.body);
+      const sourceCode = readSource(req.body);
+      const stdin = readStdin(req.body);
+      const result = await execute({ language, sourceCode, stdin });
+      res.json(publicRunResult(result));
+    } catch (error) {
+      next(error);
     }
-    const language = readLanguage(req.body);
-    const sourceCode = readSource(req.body);
-    const stdin = readStdin(req.body);
-    const result = await execute({ language, sourceCode, stdin });
-    res.json(publicRunResult(result));
-  } catch (error) {
-    next(error);
   }
-});
+);
 
 codingRouter.post(
   "/submit",
@@ -186,110 +184,111 @@ codingRouter.post(
   gateBodyProblem(true),
   executionGuard,
   async (req, res, next) => {
-  try {
-    requireJudge0();
-    const language = readLanguage(req.body);
-    const sourceCode = readSource(req.body);
-    const problemId = req.body?.problemId;
+    try {
+      requireJudge0();
+      const language = readLanguage(req.body);
+      const sourceCode = readSource(req.body);
+      const problemId = req.body?.problemId;
 
-    if (typeof problemId !== "string" || problemId.trim().length === 0) {
-      throw new HttpError(400, "Problem ID is required.");
-    }
-
-    const id = problemId.trim();
-    assertProblemAccess(req.plan, id);
-
-    const tests = getProblemTests(id);
-    if (!tests || tests.length === 0) {
-      throw new HttpError(404, "Problem not found.");
-    }
-
-    let passedTests = 0;
-    let firstFailure = "accepted";
-    let maxTime = 0;
-    let maxMemory = 0;
-    const cases = [];
-
-    for (let index = 0; index < tests.length; index += 1) {
-      const test = tests[index];
-      const result = await execute({
-        language,
-        sourceCode,
-        stdin: test.input,
-      });
-
-      const timeValue = Number.parseFloat(String(result.time ?? "0"));
-      const memoryValue = Number(result.memory ?? 0);
-      if (Number.isFinite(timeValue)) {
-        maxTime = Math.max(maxTime, timeValue);
-      }
-      if (Number.isFinite(memoryValue)) {
-        maxMemory = Math.max(maxMemory, memoryValue);
+      if (typeof problemId !== "string" || problemId.trim().length === 0) {
+        throw new HttpError(400, "Problem ID is required.");
       }
 
-      if (result.status === "compilation_error") {
-        for (let rest = index; rest < tests.length; rest += 1) {
-          cases.push({
-            index: rest + 1,
-            passed: false,
-            sample: isSampleIndex(rest),
-            status: rest === index ? "compilation_error" : "not_run",
-          });
+      const id = problemId.trim();
+      assertProblemAccess(req.plan, id);
+
+      const tests = getProblemTests(id);
+      if (!tests || tests.length === 0) {
+        throw new HttpError(404, "Problem not found.");
+      }
+
+      let passedTests = 0;
+      let firstFailure = "accepted";
+      let maxTime = 0;
+      let maxMemory = 0;
+      const cases = [];
+
+      for (let index = 0; index < tests.length; index += 1) {
+        const test = tests[index];
+        const result = await execute({
+          language,
+          sourceCode,
+          stdin: test.input,
+        });
+
+        const timeValue = Number.parseFloat(String(result.time ?? "0"));
+        const memoryValue = Number(result.memory ?? 0);
+        if (Number.isFinite(timeValue)) {
+          maxTime = Math.max(maxTime, timeValue);
         }
-        res.json(
-          publicSubmitResult({
-            status: "compilation_error",
-            passedTests: 0,
-            totalTests: tests.length,
-            time: result.time,
-            memory: result.memory,
-            compileOutput: result.compileOutput,
-            cases,
-          }),
-        );
-        return;
+        if (Number.isFinite(memoryValue)) {
+          maxMemory = Math.max(maxMemory, memoryValue);
+        }
+
+        if (result.status === "compilation_error") {
+          for (let rest = index; rest < tests.length; rest += 1) {
+            cases.push({
+              index: rest + 1,
+              passed: false,
+              sample: isSampleIndex(rest),
+              status: rest === index ? "compilation_error" : "not_run",
+            });
+          }
+          res.json(
+            publicSubmitResult({
+              status: "compilation_error",
+              passedTests: 0,
+              totalTests: tests.length,
+              time: result.time,
+              memory: result.memory,
+              compileOutput: result.compileOutput,
+              cases,
+            }),
+          );
+          return;
+        }
+
+        const passed =
+          result.status === "accepted" &&
+          outputsMatch(result.stdout, test.expectedOutput);
+        const caseStatus = passed
+          ? "accepted"
+          : result.status === "accepted"
+            ? "wrong_answer"
+            : result.status;
+
+        cases.push({
+          index: index + 1,
+          passed,
+          sample: isSampleIndex(index),
+          status: caseStatus,
+        });
+
+        if (passed) {
+          passedTests += 1;
+        } else if (firstFailure === "accepted") {
+          firstFailure = caseStatus;
+        }
       }
 
-      const passed =
-        result.status === "accepted" &&
-        outputsMatch(result.stdout, test.expectedOutput);
-      const caseStatus = passed
-        ? "accepted"
-        : result.status === "accepted"
-          ? "wrong_answer"
-          : result.status;
+      const status =
+        passedTests === tests.length ? "accepted" : firstFailure;
 
-      cases.push({
-        index: index + 1,
-        passed,
-        sample: isSampleIndex(index),
-        status: caseStatus,
-      });
-
-      if (passed) {
-        passedTests += 1;
-      } else if (firstFailure === "accepted") {
-        firstFailure = caseStatus;
-      }
+      res.json(
+        publicSubmitResult({
+          status,
+          passedTests,
+          totalTests: tests.length,
+          time: maxTime ? String(maxTime) : null,
+          memory: maxMemory || null,
+          cases,
+        }),
+      );
+    } catch (error) {
+      next(error);
     }
-
-    const status =
-      passedTests === tests.length ? "accepted" : firstFailure;
-
-    res.json(
-      publicSubmitResult({
-        status,
-        passedTests,
-        totalTests: tests.length,
-        time: maxTime ? String(maxTime) : null,
-        memory: maxMemory || null,
-        cases,
-      }),
-    );
-  } catch (error) {
-    next(error);
   }
-});
+);
 
 codingRouter.post(
   "/dry-run",
@@ -297,28 +296,22 @@ codingRouter.post(
   gateDryRun,
   executionGuard,
   async (req, res, next) => {
-  try {
-    requireJudge0();
-    const language = readLanguage(req.body);
-    const resolved = resolveLanguage(language);
-    if (!resolved || resolved.key !== "python") {
-      throw new HttpError(
-        400,
-        "Dry Run currently supports Python only. Switch the language to Python to trace lines and variables. Use Run for C, C++, and Java.",
-      );
+    try {
+      const language = readLanguage(req.body);
+      const sourceCode = readSource(req.body);
+      const stdin = readStdin(req.body);
+
+      const result = await universalDryRun({
+        language,
+        sourceCode,
+        stdin,
+      });
+
+      res.json(result);
+    } catch (error) {
+      next(error);
     }
-    const sourceCode = readSource(req.body);
-    const stdin = readStdin(req.body);
-    const wrapped = wrapPythonSource(sourceCode);
-    const result = await execute({
-      language: "Python",
-      sourceCode: wrapped,
-      stdin,
-    });
-    res.json(extractDryRun(result));
-  } catch (error) {
-    next(error);
   }
-});
+);
 
 module.exports = codingRouter;

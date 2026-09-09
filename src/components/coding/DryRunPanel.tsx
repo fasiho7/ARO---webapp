@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/Button";
 import type { DryRunResult, DryRunStep } from "@/lib/codingApi";
 import { cn } from "@/lib/cn";
@@ -20,6 +21,7 @@ export function DryRunPanel({
   index,
   preparing,
   status,
+  language,
   onStart,
   onNext,
   onPrevious,
@@ -31,6 +33,7 @@ export function DryRunPanel({
   index: number;
   preparing: boolean;
   status: string;
+  language: string;
   onStart: () => void;
   onNext: () => void;
   onPrevious: () => void;
@@ -41,8 +44,28 @@ export function DryRunPanel({
   const steps = result?.steps ?? [];
   const step = steps[index];
   const total = steps.length;
-  const locals = step ? Object.entries(step.locals) : [];
+  const locals = step ? Object.entries(step.locals ?? {}) : [];
   const complete = Boolean(result && !result.syntaxError && total > 0 && index === total - 1);
+  const activeLine = step?.line ?? null;
+  const codeScrollRef = useRef<HTMLPreElement>(null);
+
+  useEffect(() => {
+    if (activeLine == null || !codeScrollRef.current) {
+      return;
+    }
+    const container = codeScrollRef.current;
+    const target = container.querySelector<HTMLElement>(`[data-line="${activeLine}"]`);
+    if (!target) {
+      return;
+    }
+    const containerTop = container.scrollTop;
+    const containerBottom = containerTop + container.clientHeight;
+    const targetTop = target.offsetTop;
+    const targetBottom = targetTop + target.offsetHeight;
+    if (targetTop < containerTop || targetBottom > containerBottom) {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [activeLine]);
 
   return (
     <div className="rounded-2xl border border-line bg-surface p-4">
@@ -108,7 +131,7 @@ export function DryRunPanel({
             ? `Step ${index + 1} / ${total}${complete ? " · Dry run complete." : ""}`
             : result
               ? "Dry run complete."
-              : "Press Start to trace this Python program."}
+              : `Press Start to trace this ${language.toUpperCase()} program.`}
       </p>
       {step ? (
         <p className="mt-2 rounded-lg border border-line bg-surface-2 px-3 py-2 font-mono text-sm text-ink">
@@ -127,13 +150,17 @@ export function DryRunPanel({
             Current line
             {step ? ` · ${eventLabel(step)} ${step.line}` : ""}
           </p>
-          <pre className="max-h-64 overflow-auto p-2 font-mono text-[12px] leading-6">
+          <pre
+            ref={codeScrollRef}
+            className="max-h-64 overflow-auto p-2 font-mono text-[12px] leading-6"
+          >
             {lines.map((line, lineIndex) => {
               const lineNumber = lineIndex + 1;
               const active = step?.line === lineNumber;
               return (
                 <div
                   key={lineNumber}
+                  data-line={lineNumber}
                   className={cn(
                     "flex gap-3 rounded px-2",
                     active && "bg-teal/20 text-ink",

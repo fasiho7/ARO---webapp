@@ -1,7 +1,6 @@
-const crypto = require("crypto");
 const { Router } = require("express");
 const { HttpError } = require("../utils/httpError");
-const { configured, readEnv } = require("../config/payments");
+const requireAdminBearerSecret = require("../middleware/requireAdminBearerSecret");
 const {
   resolveBankPayment,
   adminListPayments,
@@ -14,31 +13,6 @@ const { adminGetProofDownloadUrl } = require("../services/proofService");
 const PAYMENT_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function secretsEqual(left, right) {
-  const a = Buffer.from(String(left || ""), "utf8");
-  const b = Buffer.from(String(right || ""), "utf8");
-  if (a.length === 0 || a.length !== b.length) {
-    return false;
-  }
-  return crypto.timingSafeEqual(a, b);
-}
-
-function requireAdminSecret(req, _res, next) {
-  const expected = readEnv("BILLING_ADMIN_SECRET");
-  if (!configured(expected)) {
-    next(new HttpError(503, "Bank verification is not configured.", "ADMIN_NOT_CONFIGURED"));
-    return;
-  }
-  const header = req.headers.authorization || "";
-  const bearer = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
-  const provided = req.headers["x-billing-admin-secret"] || bearer;
-  if (!provided || !secretsEqual(provided, expected)) {
-    next(new HttpError(401, "Admin verification secret is invalid.", "ADMIN_UNAUTHORIZED"));
-    return;
-  }
-  next();
-}
-
 function readPaymentId(id) {
   if (typeof id !== "string" || !PAYMENT_ID.test(id)) {
     throw new HttpError(400, "Invalid payment id.");
@@ -48,7 +22,10 @@ function readPaymentId(id) {
 
 const adminRouter = Router();
 
-adminRouter.get("/payments", requireAdminSecret, async (req, res, next) => {
+// All routes require the server-only admin secret forwarded by the Next.js proxy.
+adminRouter.use(requireAdminBearerSecret);
+
+adminRouter.get("/payments", async (req, res, next) => {
   try {
     const params = {
       status: typeof req.query.status === "string" ? req.query.status : "",
@@ -67,7 +44,7 @@ adminRouter.get("/payments", requireAdminSecret, async (req, res, next) => {
   }
 });
 
-adminRouter.get("/payments/:id", requireAdminSecret, async (req, res, next) => {
+adminRouter.get("/payments/:id", async (req, res, next) => {
   try {
     const result = await adminGetPaymentDetails(readPaymentId(req.params.id));
     res.json({
@@ -81,7 +58,7 @@ adminRouter.get("/payments/:id", requireAdminSecret, async (req, res, next) => {
   }
 });
 
-adminRouter.get("/payments/:id/proof", requireAdminSecret, async (req, res, next) => {
+adminRouter.get("/payments/:id/proof", async (req, res, next) => {
   try {
     const result = await adminGetProofDownloadUrl(readPaymentId(req.params.id));
     res.json({
@@ -97,32 +74,26 @@ adminRouter.get("/payments/:id/proof", requireAdminSecret, async (req, res, next
   }
 });
 
-adminRouter.post("/payments/:id/approve", requireAdminSecret, async (req, res, next) => {
+adminRouter.post("/payments/:id/approve", async (req, res, next) => {
   try {
     const payment = await adminApprovePayment(readPaymentId(req.params.id));
-    res.json({
-      success: true,
-      payment,
-    });
+    res.json({ success: true, payment });
   } catch (error) {
     next(error);
   }
 });
 
-adminRouter.post("/payments/:id/reject", requireAdminSecret, async (req, res, next) => {
+adminRouter.post("/payments/:id/reject", async (req, res, next) => {
   try {
     const reason = typeof req.body?.reason === "string" ? req.body.reason : "";
     const payment = await adminRejectPayment(readPaymentId(req.params.id), reason);
-    res.json({
-      success: true,
-      payment,
-    });
+    res.json({ success: true, payment });
   } catch (error) {
     next(error);
   }
 });
 
-adminRouter.post("/payments/:id/resolve", requireAdminSecret, async (req, res, next) => {
+adminRouter.post("/payments/:id/resolve", async (req, res, next) => {
   try {
     readPaymentId(req.params.id);
     const outcome =
@@ -135,10 +106,7 @@ adminRouter.post("/payments/:id/resolve", requireAdminSecret, async (req, res, n
       outcome,
       typeof req.body?.reason === "string" ? req.body.reason : "",
     );
-    res.json({
-      success: true,
-      payment,
-    });
+    res.json({ success: true, payment });
   } catch (error) {
     next(error);
   }

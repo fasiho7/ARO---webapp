@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ACCESS_COPY } from "@/lib/access";
+import { useAuth } from "@/components/providers/AuthProvider";
 import {
   fetchQuizAnalytics,
   fetchQuizHistory,
@@ -18,6 +19,7 @@ import {
 } from "@/lib/quizApi";
 
 export function QuizLanding() {
+  const { user, loading: authLoading } = useAuth();
   const [overview, setOverview] = useState<QuizOverview | null>(null);
   const [history, setHistory] = useState<QuizHistoryItem[]>([]);
   const [analytics, setAnalytics] = useState<QuizAnalytics | null>(null);
@@ -25,8 +27,14 @@ export function QuizLanding() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     async function load() {
+
       try {
         const me = await fetchQuizOverview();
         if (cancelled) {
@@ -73,11 +81,28 @@ export function QuizLanding() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authLoading, user]);
 
-  if (loading) {
+  if (authLoading || (user && loading)) {
     return (
       <p className="font-mono text-sm text-muted">Loading quizzes…</p>
+    );
+  }
+
+  if (!user) {
+    return (
+      <Card>
+        <p className="font-mono text-[11px] tracking-wide text-gold uppercase">
+          Sign In Required
+        </p>
+        <h2 className="display mt-2 text-2xl">Sign in to access Coding Quizzes</h2>
+        <p className="mt-2 text-sm leading-6 text-muted">
+          Your quiz attempts, test cases, and performance analytics are saved to your account.
+        </p>
+        <div className="mt-5">
+          <Button href="/sign-in?next=/quiz">Sign in to Aro</Button>
+        </div>
+      </Card>
     );
   }
 
@@ -88,6 +113,7 @@ export function QuizLanding() {
       </Card>
     );
   }
+
 
   const isPro = overview.plan === "pro";
   const primary =

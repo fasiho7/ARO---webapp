@@ -545,46 +545,95 @@ async function adminGetPaymentDetails(paymentId) {
 async function adminApprovePayment(paymentId) {
   const row = await loadPaymentById(paymentId);
 
+  // Already successful — idempotent: just re-grant Pro in case it was missed.
   if (row.status === "successful") {
     await grantProPlan(row.user_id);
     return serializePayment(row);
   }
+  // Already in a terminal state other than successful — nothing to do.
   if (isTerminalStatus(row.status)) {
     return serializePayment(row);
   }
 
-  if (row.provider !== "bank" && row.provider !== "easypaisa") {
-    throw new HttpError(400, "Approval is only available for bank or Easypaisa payments.", "APPROVAL_NOT_ALLOWED");
+  // For bank and easypaisa providers use the existing verifyPayment path
+  // (which already handles source:"admin"). For all other providers (mock,
+  // jazzcash, card) patch the DB directly so the admin can approve any
+  // pending payment regardless of how it was created.
+  if (row.provider === "bank" || row.provider === "easypaisa") {
+    const provider = getProvider(row.provider);
+    const result = await provider.verifyPayment(row, {
+      outcome: "successful",
+      source: "admin",
+    });
+    const next = await applyVerifiedResult(row, result);
+    return serializePayment(next);
   }
 
-  const provider = getProvider(row.provider);
-  const result = await provider.verifyPayment(row, {
-    outcome: "successful",
-    source: "admin",
-  });
-  const next = await applyVerifiedResult(row, result);
+  // Direct DB patch for all other providers.
+  const admin = requireAdmin();
+  const now = new Date().toISOString();
+  const { data, error } = await admin
+    .from("payments")
+    .update({
+      status: "successful",
+      paid_at: now,
+      completed_at: now,
+      failure_reason: null,
+    })
+    .eq("id", row.id)
+    .select("*")
+    .maybeSingle();
+
+  if (error) {
+    throw new HttpError(503, "Could not approve this payment.", "PAYMENT_UPDATE_FAILED");
+  }
+
+  const next = data || (await loadPaymentById(row.id));
+  await grantProPlan(row.user_id);
   return serializePayment(next);
 }
 
 async function adminRejectPayment(paymentId, reason) {
   const row = await loadPaymentById(paymentId);
 
+  // Already in a terminal state — nothing to do.
   if (isTerminalStatus(row.status)) {
     return serializePayment(row);
   }
 
-  if (row.provider !== "bank" && row.provider !== "easypaisa") {
-    throw new HttpError(400, "Rejection is only available for bank or Easypaisa payments.", "REJECTION_NOT_ALLOWED");
+  // For bank and easypaisa use the existing verifyPayment path.
+  if (row.provider === "bank" || row.provider === "easypaisa") {
+    const provider = getProvider(row.provider);
+    const result = await provider.verifyPayment(row, {
+      outcome: "failed",
+      reason: typeof reason === "string" ? reason : "",
+      source: "admin",
+    });
+    const next = await applyVerifiedResult(row, result);
+    return serializePayment(next);
   }
 
-  const provider = getProvider(row.provider);
-  const result = await provider.verifyPayment(row, {
-    outcome: "failed",
-    reason: typeof reason === "string" ? reason : "",
-    source: "admin",
-  });
-  const next = await applyVerifiedResult(row, result);
-  return serializePayment(next);
+  // Direct DB patch for all other providers.
+  const admin = requireAdmin();
+  const failureReason =
+    typeof reason === "string" && reason.trim()
+      ? reason.trim()
+      : "Payment rejected by admin.";
+  const { data, error } = await admin
+    .from("payments")
+    .update({
+      status: "failed",
+      failure_reason: failureReason,
+    })
+    .eq("id", row.id)
+    .select("*")
+    .maybeSingle();
+
+  if (error) {
+    throw new HttpError(503, "Could not reject this payment.", "PAYMENT_UPDATE_FAILED");
+  }
+
+  return serializePayment(data || (await loadPaymentById(row.id)));
 }
 
 module.exports = {

@@ -1,4 +1,4 @@
-export const DEFAULT_AUTH_REDIRECT = "/dashboard";
+export const DEFAULT_AUTH_REDIRECT = "/";
 
 export const protectedPathPrefixes = [
   "/dashboard",
@@ -14,6 +14,7 @@ export const protectedPathPrefixes = [
   "/settings",
   "/upgrade",
   "/quiz",
+  "/api/admin",
 ] as const;
 
 export function isProtectedPath(pathname: string): boolean {
@@ -23,7 +24,12 @@ export function isProtectedPath(pathname: string): boolean {
 }
 
 export function isAuthPath(pathname: string): boolean {
-  return pathname === "/login" || pathname === "/signup";
+  return (
+    pathname === "/login" ||
+    pathname === "/signup" ||
+    pathname === "/sign-in" ||
+    pathname === "/sign-up"
+  );
 }
 
 /** Only allow in-app relative paths. Blocks open redirects. */
@@ -39,3 +45,4 @@ export function safeNextPath(value: string | null | undefined): string {
   }
   return value;
 }
+

@@ -11,9 +11,11 @@ type MonacoPaneProps = {
   fontSize: number;
   minimap: boolean;
   examMode?: boolean;
+  highlightLine?: number | null;
   onCodeChange: (code: string) => void;
   onCursorChange: (line: number, column: number) => void;
   onIntegrityEvent?: (eventType: string) => void;
+  onEditorReady?: (editor: unknown) => void;
 };
 
 function FallbackEditor({
@@ -21,13 +23,41 @@ function FallbackEditor({
   code,
   readOnly,
   examMode,
+  highlightLine,
   onCodeChange,
   onIntegrityEvent,
 }: Pick<
   MonacoPaneProps,
-  "language" | "code" | "readOnly" | "examMode" | "onCodeChange" | "onIntegrityEvent"
+  | "language"
+  | "code"
+  | "readOnly"
+  | "examMode"
+  | "highlightLine"
+  | "onCodeChange"
+  | "onIntegrityEvent"
 >) {
   const lines = Math.max(code.split("\n").length, 1);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (highlightLine == null || !scrollRef.current) {
+      return;
+    }
+    const target = scrollRef.current.querySelector<HTMLElement>(
+      `[data-line="${highlightLine}"]`,
+    );
+    if (!target) {
+      return;
+    }
+    const container = scrollRef.current;
+    const containerTop = container.scrollTop;
+    const containerBottom = containerTop + container.clientHeight;
+    const targetTop = target.offsetTop;
+    const targetBottom = targetTop + target.offsetHeight;
+    if (targetTop < containerTop || targetBottom > containerBottom) {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [highlightLine]);
 
   return (
     <div className="flex h-full min-h-[380px] overflow-hidden bg-[#1e1e1e]">
@@ -39,54 +69,75 @@ function FallbackEditor({
           <div key={index}>{index + 1}</div>
         ))}
       </div>
-      <textarea
-        value={code}
-        onChange={(event) => onCodeChange(event.target.value)}
-        onCopy={(e) => {
-          if (examMode) {
-            e.preventDefault();
-            onIntegrityEvent?.("copy_attempt");
-          }
-        }}
-        onPaste={(e) => {
-          if (examMode) {
-            e.preventDefault();
-            onIntegrityEvent?.("paste_attempt");
-          }
-        }}
-        onCut={(e) => {
-          if (examMode) {
-            e.preventDefault();
-            onIntegrityEvent?.("cut_attempt");
-          }
-        }}
-        onDrop={(e) => {
-          if (examMode) {
-            e.preventDefault();
-            onIntegrityEvent?.("drop_attempt");
-          }
-        }}
-        onContextMenu={(e) => {
-          if (examMode) {
-            e.preventDefault();
-            onIntegrityEvent?.("context_menu_attempt");
-          }
-        }}
-        onKeyDown={(e) => {
-          if (
-            examMode &&
-            (e.ctrlKey || e.metaKey) &&
-            ["c", "v", "x"].includes(e.key.toLowerCase())
-          ) {
-            e.preventDefault();
-            onIntegrityEvent?.(`${e.key.toLowerCase()}_shortcut_attempt`);
-          }
-        }}
-        spellCheck={false}
-        disabled={readOnly}
-        aria-label={`${language} code editor`}
-        className="min-h-[380px] min-w-0 flex-1 resize-none bg-[#1e1e1e] p-3 font-mono text-[13px] leading-7 text-[#d4d4d4] outline-none disabled:opacity-70"
-      />
+      <div
+        ref={scrollRef}
+        className="min-h-[380px] min-w-0 flex-1 overflow-auto bg-[#1e1e1e]"
+      >
+        <div className="font-mono text-[13px] leading-7 text-[#d4d4d4]">
+          {Array.from({ length: lines }, (_, index) => {
+            const lineNumber = index + 1;
+            const lineCode = code.split("\n")[index] ?? "";
+            const active = highlightLine === lineNumber;
+            return (
+              <div
+                key={index}
+                data-line={lineNumber}
+                className={
+                  active
+                    ? "flex items-stretch bg-teal/20 px-3"
+                    : "flex items-stretch px-3"
+                }
+              >
+                <textarea
+                  value={lineCode}
+                  onChange={(event) => {
+                    const next = code.split("\n");
+                    next[index] = event.target.value;
+                    onCodeChange(next.join("\n"));
+                  }}
+                  onCopy={(e) => {
+                    if (examMode) {
+                      e.preventDefault();
+                      onIntegrityEvent?.("copy_attempt");
+                    }
+                  }}
+                  onPaste={(e) => {
+                    if (examMode) {
+                      e.preventDefault();
+                      onIntegrityEvent?.("paste_attempt");
+                    }
+                  }}
+                  onCut={(e) => {
+                    if (examMode) {
+                      e.preventDefault();
+                      onIntegrityEvent?.("cut_attempt");
+                    }
+                  }}
+                  onDrop={(e) => {
+                    if (examMode) {
+                      e.preventDefault();
+                      onIntegrityEvent?.("drop_attempt");
+                    }
+                  }}
+                  onContextMenu={(e) => {
+                    if (examMode) {
+                      e.preventDefault();
+                      onIntegrityEvent?.("context_menu_attempt");
+                    }
+                  }}
+                  disabled={readOnly}
+                  spellCheck={false}
+                  aria-label={`Line ${lineNumber}`}
+                  className="flex-1 resize-none bg-transparent font-mono text-[13px] leading-7 outline-none disabled:opacity-70"
+                  style={{
+                    color: active ? "#e7f3ee" : "#d4d4d4",
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -98,12 +149,17 @@ export default function MonacoPane({
   fontSize,
   minimap,
   examMode = false,
+  highlightLine = null,
   onCodeChange,
   onCursorChange,
   onIntegrityEvent,
+  onEditorReady,
 }: MonacoPaneProps) {
   const [failed, setFailed] = useState(false);
   const mounted = useRef(false);
+  const editorRef = useRef<unknown>(null);
+  const monacoRef = useRef<unknown>(null);
+  const decorationIdsRef = useRef<string[]>([]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -125,8 +181,45 @@ export default function MonacoPane({
     return () => window.clearTimeout(timeout);
   }, []);
 
+  useEffect(() => {
+    const editor = editorRef.current as any;
+    const monaco = monacoRef.current as any;
+    if (!editor || !monaco) {
+      return;
+    }
+    const model = editor.getModel();
+    if (!model) {
+      return;
+    }
+
+    if (highlightLine != null && Number.isFinite(highlightLine) && highlightLine > 0) {
+      const lineCount = model.getLineCount();
+      const safeLine = Math.min(highlightLine, Math.max(lineCount, 1));
+      editor.revealLineInCenter(safeLine, monaco.editor.ScrollType.Smooth);
+
+      const newDecorations = [
+        {
+          range: new monaco.Range(safeLine, 1, safeLine, model.getLineMaxColumn(safeLine)),
+          options: {
+            isWholeLine: true,
+            className: "dry-run-highlight-line",
+            inlineClassName: "dry-run-highlight-text",
+            linesDecorationsClassName: "dry-run-highlight-gutter",
+          },
+        },
+      ];
+      decorationIdsRef.current = editor.deltaDecorations(decorationIdsRef.current, newDecorations);
+    } else {
+      decorationIdsRef.current = editor.deltaDecorations(decorationIdsRef.current, []);
+    }
+  }, [highlightLine, code]);
+
   const handleMount: OnMount = (editor, monaco) => {
     mounted.current = true;
+    editorRef.current = editor;
+    monacoRef.current = monaco;
+    onEditorReady?.(editor);
+
     const position = editor.getPosition();
     if (position) {
       onCursorChange(position.lineNumber, position.column);
@@ -136,9 +229,6 @@ export default function MonacoPane({
     });
 
     if (examMode) {
-      // Layer 1 — override Monaco's internal clipboard action pipeline via addCommand.
-      // This is more reliable than onKeyDown/preventDefault because addCommand replaces
-      // the built-in handler at the command-registry level before Monaco dispatches it.
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {
         onIntegrityEvent?.("c_shortcut_attempt");
       });
@@ -149,8 +239,6 @@ export default function MonacoPane({
         onIntegrityEvent?.("x_shortcut_attempt");
       });
 
-      // Layer 2 — intercept raw DOM clipboard/context-menu events on the editor DOM node.
-      // Catches browser-level paths (Edit menu, right-click via accessibility tools, drops).
       const domNode = editor.getDomNode();
       if (domNode) {
         const preventAndReport = (e: Event, type: string) => {
@@ -180,6 +268,7 @@ export default function MonacoPane({
         code={code}
         readOnly={readOnly}
         examMode={examMode}
+        highlightLine={highlightLine}
         onCodeChange={onCodeChange}
         onIntegrityEvent={onIntegrityEvent}
       />
@@ -188,6 +277,19 @@ export default function MonacoPane({
 
   return (
     <div className="h-full w-full">
+      <style jsx global>{`
+        .dry-run-highlight-line {
+          background-color: rgba(20, 184, 166, 0.18) !important;
+        }
+        .dry-run-highlight-text {
+          color: #e7f3ee !important;
+        }
+        .dry-run-highlight-gutter {
+          background-color: rgba(20, 184, 166, 0.28) !important;
+          width: 3px !important;
+          margin-left: -3px !important;
+        }
+      `}</style>
       <Editor
         height="100%"
         width="100%"
@@ -237,10 +339,8 @@ export default function MonacoPane({
           suggestOnTriggerCharacters: !examMode,
           snippetSuggestions: examMode ? "none" : "inline",
           wordBasedSuggestions: examMode ? "off" : "matchingDocuments",
-          // Prevent drag-and-drop text movement in exam mode.
           dragAndDrop: !examMode,
           dropIntoEditor: { enabled: !examMode },
-          // Prevent Linux middle-click selection-paste in exam mode.
           selectionClipboard: !examMode,
         }}
       />

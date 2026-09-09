@@ -77,7 +77,7 @@ export function AdminPayments() {
     } catch (caught: unknown) {
       const message = caught instanceof Error ? caught.message : "Could not load admin payments.";
       setError(message);
-      if (/authorization|required|invalid/i.test(message)) {
+      if (/authorization|required|invalid|forbidden/i.test(message)) {
         setAuthorized(false);
       }
     } finally {

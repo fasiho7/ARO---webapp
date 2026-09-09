@@ -7,6 +7,7 @@ const {
 } = require("../config/storage");
 const { HttpError } = require("../utils/httpError");
 const { serviceSupabase } = require("../config/supabase");
+const { sendProofSubmittedEmail } = require("./emailService");
 
 const ALLOWED_MIME_TYPES = [
   "image/jpeg",
@@ -294,6 +295,36 @@ async function uploadPaymentProof(userId, paymentId, fileBuffer, contentType, or
       "PROOF_RECORD_FAILED",
     );
   }
+
+  // Fire-and-forget admin notification email. Never let email failure
+  // block or roll back a successful proof upload.
+  (async () => {
+    try {
+      const { data: profile } = await serviceSupabase
+        .from("profiles")
+        .select("full_name, email")
+        .eq("id", userId)
+        .maybeSingle();
+
+      const { data: pmtRow } = await serviceSupabase
+        .from("payments")
+        .select("amount, currency, provider, created_at")
+        .eq("id", paymentId)
+        .maybeSingle();
+
+      await sendProofSubmittedEmail({
+        userName: profile?.full_name || null,
+        userEmail: profile?.email || null,
+        amount: pmtRow?.amount ?? 499,
+        currency: pmtRow?.currency ?? "PKR",
+        provider: pmtRow?.provider ?? payment.provider,
+        paymentId,
+        createdAt: pmtRow?.created_at || new Date().toISOString(),
+      });
+    } catch (emailErr) {
+      console.error("[proofService] Admin notification email failed:", emailErr?.message ?? emailErr);
+    }
+  })();
 
   return {
     path: result.path,

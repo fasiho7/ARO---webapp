@@ -125,7 +125,7 @@ export type DryRunStep = {
 
 export type DryRunResult = {
   success: true;
-  language: "Python";
+  language: string; // Dynamic string for C, C++, Java, and Python
   steps: DryRunStep[];
   output: string;
   truncated: boolean;

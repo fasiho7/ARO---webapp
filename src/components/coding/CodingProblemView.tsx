@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AccountProgressNote } from "@/components/auth/AccountProgressNote";
 import { UpgradePrompt } from "@/components/access/UpgradePrompt";
 import { usePlan } from "@/components/access/usePlan";
@@ -37,6 +37,23 @@ import {
   problemProgressId,
 } from "@/lib/codingProgress";
 
+function pickDefaultLanguage(
+  starterCode: Record<CodingLanguage, string>,
+): CodingLanguage {
+  const candidates: CodingLanguage[] = ["Python", "C++", "C", "Java"];
+  for (const lang of candidates) {
+    const code = starterCode[lang];
+    if (typeof code === "string" && code.trim().length > 0) {
+      return lang;
+    }
+  }
+  return "C++";
+}
+
+function languageSupportsDryRun(language: CodingLanguage): boolean {
+  return language === "Python";
+}
+
 export function CodingProblemView({
   track,
   topic,
@@ -54,7 +71,11 @@ export function CodingProblemView({
   const dryRunAllowed = canAccessDryRun(plan);
   const id = problemProgressId(track.id, topic.slug, problem.slug);
   const completed = isProblemComplete(store, id);
-  const [language, setLanguage] = useState<CodingLanguage>("C++");
+  const defaultLanguage = useMemo(
+    () => pickDefaultLanguage(problem.starterCode),
+    [problem.starterCode],
+  );
+  const [language, setLanguage] = useState<CodingLanguage>(defaultLanguage);
   const [codeByLang, setCodeByLang] = useState<
     Record<CodingLanguage, string>
   >(() => ({ ...problem.starterCode }));
@@ -72,12 +93,27 @@ export function CodingProblemView({
   const [dryRunSource, setDryRunSource] = useState("");
   const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(null);
   const [dryRunIndex, setDryRunIndex] = useState(0);
-  const [dryRunStatus, setDryRunStatus] = useState(
-    "Press Start to trace this Python program.",
-  );
+  const [dryRunLanguage, setDryRunLanguage] = useState<CodingLanguage>(defaultLanguage);
+  const [dryRunStatus, setDryRunStatus] = useState("");
   const [showDryRunUpgrade, setShowDryRunUpgrade] = useState(false);
 
   const code = codeByLang[language];
+
+  const highlightLine = useMemo<number | null>(() => {
+    if (!dryRunOpen) {
+      return null;
+    }
+    const steps = dryRunResult?.steps ?? [];
+    if (steps.length === 0) {
+      return null;
+    }
+    const safeIndex = Math.min(Math.max(dryRunIndex, 0), steps.length - 1);
+    const line = steps[safeIndex]?.line ?? null;
+    if (typeof line !== "number" || !Number.isFinite(line) || line <= 0) {
+      return null;
+    }
+    return line;
+  }, [dryRunOpen, dryRunResult, dryRunIndex]);
 
   useEffect(() => {
     setSamples(sampleCases); // eslint-disable-line react-hooks/set-state-in-effect
@@ -99,6 +135,13 @@ export function CodingProblemView({
       cancelled = true;
     };
   }, [id, samples.length]);
+
+  function idleDryRunStatus(lang: CodingLanguage): string {
+    if (languageSupportsDryRun(lang)) {
+      return `Press Start to trace this ${lang} program.`;
+    }
+    return `Dry Run currently supports Python only. Switch the editor language to Python to trace lines and variables. Use Run for ${lang}.`;
+  }
 
   function onCodeChange(next: string) {
     setCodeByLang((previous) => ({ ...previous, [language]: next }));
@@ -219,6 +262,7 @@ export function CodingProblemView({
 
     setDryRunOpen(true);
     setDryRunSource(code);
+    setDryRunLanguage(language);
     setDryRunResult(null);
     setDryRunIndex(0);
 
@@ -227,9 +271,9 @@ export function CodingProblemView({
       return;
     }
 
-    if (language !== "Python") {
+    if (!languageSupportsDryRun(language)) {
       setDryRunStatus(
-        "Dry Run currently supports Python only. Switch the language to Python to trace lines and variables. Use Run for C, C++, and Java.",
+        `Dry Run currently supports Python only. Switch the editor language to Python to trace lines and variables. Use Run for ${language}.`,
       );
       return;
     }
@@ -262,6 +306,65 @@ export function CodingProblemView({
     } finally {
       setDryRunning(false);
       setBusy(false);
+    }
+  }
+
+  function handleNext() {
+    if (!dryRunResult) {
+      return;
+    }
+    const total = dryRunResult.steps.length;
+    if (total === 0) {
+      return;
+    }
+    const next = Math.min(dryRunIndex + 1, total - 1);
+    setDryRunIndex(next);
+    setDryRunStatus(dryRunStatusFor(dryRunResult, next));
+  }
+
+  function handlePrevious() {
+    if (!dryRunResult) {
+      return;
+    }
+    const total = dryRunResult.steps.length;
+    if (total === 0) {
+      return;
+    }
+    const next = Math.max(dryRunIndex - 1, 0);
+    setDryRunIndex(next);
+    setDryRunStatus(dryRunStatusFor(dryRunResult, next));
+  }
+
+  function handleRestart() {
+    if (!dryRunResult) {
+      return;
+    }
+    setDryRunIndex(0);
+    setDryRunStatus(dryRunStatusFor(dryRunResult, 0));
+  }
+
+  function handleStop() {
+    setDryRunOpen(false);
+    setDryRunResult(null);
+    setDryRunIndex(0);
+    setDryRunStatus(idleDryRunStatus(language));
+    setDryRunSource("");
+  }
+
+  function handleLanguageChange(next: CodingLanguage) {
+    if (next === language) {
+      return;
+    }
+    setLanguage(next);
+    if (dryRunOpen) {
+      setDryRunLanguage(next);
+      setDryRunSource(codeByLang[next] ?? "");
+      setDryRunResult(null);
+      setDryRunIndex(0);
+      setDryRunStatus(idleDryRunStatus(next));
+    }
+    if (view.kind !== "idle") {
+      setView({ kind: "idle" });
     }
   }
 
@@ -302,7 +405,8 @@ export function CodingProblemView({
             running={running}
             submitting={submitting}
             dryRunning={dryRunning}
-            onLanguageChange={setLanguage}
+            highlightLine={highlightLine}
+            onLanguageChange={handleLanguageChange}
             onCodeChange={onCodeChange}
             onRun={() => {
               void handleRun();
@@ -335,42 +439,15 @@ export function CodingProblemView({
             result={dryRunResult}
             index={dryRunIndex}
             preparing={dryRunning}
-            status={dryRunStatus}
+            status={dryRunStatus || idleDryRunStatus(dryRunLanguage)}
+            language={dryRunLanguage}
             onStart={() => {
               void handleDryRun();
             }}
-            onNext={() => {
-              if (!dryRunResult) {
-                return;
-              }
-              const next = Math.min(
-                dryRunIndex + 1,
-                Math.max(dryRunResult.steps.length - 1, 0),
-              );
-              setDryRunIndex(next);
-              setDryRunStatus(dryRunStatusFor(dryRunResult, next));
-            }}
-            onPrevious={() => {
-              if (!dryRunResult) {
-                return;
-              }
-              const next = Math.max(dryRunIndex - 1, 0);
-              setDryRunIndex(next);
-              setDryRunStatus(dryRunStatusFor(dryRunResult, next));
-            }}
-            onRestart={() => {
-              if (!dryRunResult) {
-                return;
-              }
-              setDryRunIndex(0);
-              setDryRunStatus(dryRunStatusFor(dryRunResult, 0));
-            }}
-            onStop={() => {
-              setDryRunOpen(false);
-              setDryRunResult(null);
-              setDryRunIndex(0);
-              setDryRunStatus("Press Start to trace this Python program.");
-            }}
+            onNext={handleNext}
+            onPrevious={handlePrevious}
+            onRestart={handleRestart}
+            onStop={handleStop}
           />
         ) : null}
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface px-4 py-3">

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ACCESS_COPY } from "@/lib/access";
+import { useAuth } from "@/components/providers/AuthProvider";
 import {
   createQuiz,
   fetchQuizOverview,
@@ -25,6 +26,7 @@ function recommendedTimer(count: number): number {
 
 export function QuizCreateForm() {
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [overview, setOverview] = useState<QuizOverview | null>(null);
   const [topic, setTopic] = useState("all");
   const [subtopic, setSubtopic] = useState("all");
@@ -36,8 +38,14 @@ export function QuizCreateForm() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     fetchQuizOverview()
+
       .then((me) => {
         if (cancelled) return;
         setOverview(me);

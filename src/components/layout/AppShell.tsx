@@ -23,8 +23,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       return;
     }
     if (status === "unauthenticated") {
-      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+      router.replace(`/sign-in?next=${encodeURIComponent(pathname)}`);
     }
+
   }, [configured, pathname, router, status]);
 
   if (configured && (status === "loading" || status === "unauthenticated")) {

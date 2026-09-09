@@ -29,6 +29,7 @@ type CodeEditorProps = {
   submitting: boolean;
   dryRunning?: boolean;
   examMode?: boolean;
+  highlightLine?: number | null;
   onLanguageChange: (language: CodingLanguage) => void;
   onCodeChange: (code: string) => void;
   onRun: () => void;
@@ -45,6 +46,7 @@ export function CodeEditor({
   submitting,
   dryRunning = false,
   examMode = false,
+  highlightLine = null,
   onLanguageChange,
   onCodeChange,
   onRun,
@@ -163,6 +165,7 @@ export function CodeEditor({
             fontSize={prefs.fontSize}
             minimap={prefs.minimap}
             examMode={examMode}
+            highlightLine={highlightLine}
             onCodeChange={onCodeChange}
             onCursorChange={(line, column) => setCursor({ line, column })}
             onIntegrityEvent={onIntegrityEvent}

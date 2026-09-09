@@ -48,6 +48,7 @@ async function attachPlan(req, _res, next) {
     req.userId = null;
   }
   req.devTesting = false;
+  req.isAdmin = false;
 
   const token = readAccessToken(req);
 
@@ -71,10 +72,11 @@ async function attachPlan(req, _res, next) {
     req.userId = data.user.id;
     const { data: profile } = await client
       .from("profiles")
-      .select("plan")
+      .select("plan, is_admin")
       .eq("id", data.user.id)
       .maybeSingle();
     req.plan = normalizePlan(profile?.plan);
+    req.isAdmin = profile?.is_admin === true;
     const devPlan = requestedDevPlan(req);
     if (devTestingEnabled() && devPlan && devTestingUserIds().has(req.userId)) {
       req.plan = devPlan;
