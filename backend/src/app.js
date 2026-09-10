@@ -6,6 +6,7 @@ const notFound = require("./middleware/notFound");
 const errorHandler = require("./middleware/errorHandler");
 
 const app = express();
+
 const allowedOrigins = new Set(
   [
     process.env.CLIENT_URL,
@@ -19,14 +20,20 @@ const allowedOrigins = new Set(
 app.use(express.json({ limit: "80kb" }));
 app.use(express.urlencoded({ extended: true, limit: "80kb" }));
 app.use(cookieParser());
+
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.has(origin)) {
-        callback(null, true);
-        return;
+      // Allow requests with no origin (like mobile apps, Postman)
+      if (!origin) return callback(null, true);
+
+      // Allow exact matches in allowedOrigins OR any Vercel domain
+      const isVercelDomain = /\.vercel\.app$/.test(origin);
+      if (allowedOrigins.has(origin) || isVercelDomain) {
+        return callback(null, true);
       }
-      callback(null, false);
+
+      return callback(null, false);
     },
     credentials: true,
   }),
