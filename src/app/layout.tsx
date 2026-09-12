@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     "An AI tutor, a practice ground for PF, OOP and DSA, and a learning route — laid out as one trail.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" data-theme="dark">
       <head>
