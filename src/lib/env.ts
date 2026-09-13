@@ -10,6 +10,14 @@ export const publicEnv = {
   supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
 } as const;
 
+/** Browser calls use same-origin `/api/*` (Next rewrites → Express). Avoids broken localhost URLs in production. */
+export function clientApiBase(): string {
+  if (typeof window !== "undefined") {
+    return "";
+  }
+  return publicEnv.apiUrl.replace(/\/$/, "");
+}
+
 export function isSupabasePublicConfigured(): boolean {
   return (
     publicEnv.supabaseUrl.length > 0 && publicEnv.supabaseAnonKey.length > 0

@@ -1,6 +1,6 @@
 import { PRO_REQUIRED_CODE, ACCESS_COPY } from "@/lib/access";
 import { bearerAuthHeaders } from "@/lib/apiAuth";
-import { publicEnv } from "@/lib/env";
+import { clientApiBase } from "@/lib/env";
 
 export const TUTOR_ERROR =
   "Sorry, I couldn't generate a response right now. Please try again.";
@@ -11,7 +11,7 @@ export type TutorConversationTurn = {
 };
 
 function apiBase(): string {
-  return publicEnv.apiUrl.replace(/\/$/, "");
+  return clientApiBase();
 }
 
 export async function askTutor(input: {

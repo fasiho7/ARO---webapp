@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { bearerAuthHeaders } from "@/lib/apiAuth";
 import { normalizePlan, type UserPlan } from "@/lib/access";
-import { publicEnv } from "@/lib/env";
+import { clientApiBase } from "@/lib/env";
 
 export function usePlan(): {
   plan: UserPlan;
@@ -21,7 +21,7 @@ export function usePlan(): {
     async function load() {
       try {
         const response = await fetch(
-          `${publicEnv.apiUrl.replace(/\/$/, "")}/api/access/me`,
+          `${clientApiBase()}/api/access/me`,
           { cache: "no-store", headers: await bearerAuthHeaders() },
         );
         const data = (await response.json()) as {

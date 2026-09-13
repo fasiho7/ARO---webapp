@@ -1,5 +1,5 @@
 import { bearerAuthHeaders } from "@/lib/apiAuth";
-import { publicEnv } from "@/lib/env";
+import { clientApiBase } from "@/lib/env";
 
 export type PaymentStatus =
   | "pending"
@@ -97,7 +97,7 @@ export class BillingApiError extends Error {
 }
 
 function apiBase(): string {
-  return publicEnv.apiUrl.replace(/\/$/, "");
+  return clientApiBase();
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {

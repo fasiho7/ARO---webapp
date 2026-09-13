@@ -50,10 +50,6 @@ function pickDefaultLanguage(
   return "C++";
 }
 
-function languageSupportsDryRun(language: CodingLanguage): boolean {
-  return language === "Python";
-}
-
 export function CodingProblemView({
   track,
   topic,
@@ -137,10 +133,7 @@ export function CodingProblemView({
   }, [id, samples.length]);
 
   function idleDryRunStatus(lang: CodingLanguage): string {
-    if (languageSupportsDryRun(lang)) {
-      return `Press Start to trace this ${lang} program.`;
-    }
-    return `Dry Run currently supports Python only. Switch the editor language to Python to trace lines and variables. Use Run for ${lang}.`;
+    return `Press Start to trace this ${lang} program.`;
   }
 
   function onCodeChange(next: string) {
@@ -268,13 +261,6 @@ export function CodingProblemView({
 
     if (!code.trim()) {
       setDryRunStatus("Write some code before starting a dry run.");
-      return;
-    }
-
-    if (!languageSupportsDryRun(language)) {
-      setDryRunStatus(
-        `Dry Run currently supports Python only. Switch the editor language to Python to trace lines and variables. Use Run for ${language}.`,
-      );
       return;
     }
 

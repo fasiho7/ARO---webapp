@@ -1,5 +1,5 @@
 import { bearerAuthHeaders } from "@/lib/apiAuth";
-import { publicEnv } from "@/lib/env";
+import { clientApiBase } from "@/lib/env";
 import { PRO_REQUIRED_CODE } from "@/lib/access";
 
 export class QuizApiError extends Error {
@@ -132,7 +132,7 @@ export type QuizAnalytics = {
 };
 
 function apiBase(): string {
-  return publicEnv.apiUrl.replace(/\/$/, "");
+  return clientApiBase();
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {

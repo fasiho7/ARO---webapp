@@ -1,5 +1,5 @@
 import { bearerAuthHeaders } from "@/lib/apiAuth";
-import { publicEnv } from "@/lib/env";
+import { clientApiBase } from "@/lib/env";
 import { PRO_REQUIRED_CODE } from "@/lib/access";
 
 const UNAVAILABLE =
@@ -57,7 +57,7 @@ export class CodingApiError extends Error {
 }
 
 function apiBase(): string {
-  return publicEnv.apiUrl.replace(/\/$/, "");
+  return clientApiBase();
 }
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {

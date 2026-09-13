@@ -7,6 +7,10 @@ const PROVIDERS = {
     url: "https://api.groq.com/openai/v1/chat/completions",
     model: "llama-3.1-8b-instant",
   },
+  nvidia: {
+    url: "https://integrate.api.nvidia.com/v1/chat/completions",
+    model: "meta/llama-3.1-8b-instruct",
+  },
 };
 
 const MAX_MESSAGE_CHARS = 8000;
@@ -17,7 +21,9 @@ const MAX_REQUESTS_PER_MINUTE = 12;
 
 function providerName() {
   const value = (process.env.AI_PROVIDER || "openai").trim().toLowerCase();
-  return value === "groq" ? "groq" : "openai";
+  if (value === "groq") return "groq";
+  if (value === "nvidia") return "nvidia";
+  return "openai";
 }
 
 function apiKey() {
@@ -25,8 +31,12 @@ function apiKey() {
   if (named) {
     return named;
   }
-  if (providerName() === "groq") {
+  const provider = providerName();
+  if (provider === "groq") {
     return process.env.GROQ_API_KEY?.trim() || "";
+  }
+  if (provider === "nvidia") {
+    return process.env.NVIDIA_API_KEY?.trim() || "";
   }
   return process.env.OPENAI_API_KEY?.trim() || "";
 }

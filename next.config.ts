@@ -23,6 +23,10 @@ const nextConfig: NextConfig = {
         destination: `${BACKEND_URL}/api/billing/:path*`,
       },
       {
+        source: "/api/ai-tutor",
+        destination: `${BACKEND_URL}/api/ai-tutor`,
+      },
+      {
         source: "/api/ai-tutor/:path*",
         destination: `${BACKEND_URL}/api/ai-tutor/:path*`,
       },
