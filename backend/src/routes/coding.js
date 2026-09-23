@@ -8,7 +8,8 @@ const {
   MAX_SOURCE_CHARS,
   MAX_STDIN_CHARS,
 } = require("../config/executionLimits");
-const { execute, isConfigured } = require("../services/judge0Service");
+const { execute: judge0Execute, isConfigured: isJudge0Configured } = require("../services/judge0Service");
+const { execute: onlineCompilerExecute, isConfigured: isOnlineCompilerConfigured } = require("../services/onlineCompilerService");
 const { universalDryRun } = require("../services/universalDryRun");
 const {
   PUBLIC_SAMPLE_COUNT,
@@ -56,8 +57,8 @@ function readStdin(body) {
   return stdin;
 }
 
-function requireJudge0() {
-  if (!isConfigured()) {
+function requireExecution() {
+  if (!isOnlineCompilerConfigured()) {
     throw new HttpError(
       503,
       "Code execution service is temporarily unavailable. Please try again.",
@@ -161,7 +162,7 @@ codingRouter.post(
   executionGuard,
   async (req, res, next) => {
     try {
-      requireJudge0();
+      requireExecution();
       const problemId =
         typeof req.body?.problemId === "string" ? req.body.problemId.trim() : "";
       if (problemId) {
@@ -170,7 +171,7 @@ codingRouter.post(
       const language = readLanguage(req.body);
       const sourceCode = readSource(req.body);
       const stdin = readStdin(req.body);
-      const result = await execute({ language, sourceCode, stdin });
+      const result = await onlineCompilerExecute({ language, sourceCode, stdin });
       res.json(publicRunResult(result));
     } catch (error) {
       next(error);

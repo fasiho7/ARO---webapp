@@ -64,7 +64,7 @@ export function CodingProblemView({
   const { store, markComplete } = useCodingProgress();
   const { plan } = usePlan();
   const problemAllowed = canAccessProblem(plan, problem.difficulty);
-  const dryRunAllowed = canAccessDryRun(plan);
+  const dryRunAllowed = canAccessDryRun(plan) && track.id === "pf";
   const id = problemProgressId(track.id, topic.slug, problem.slug);
   const completed = isProblemComplete(store, id);
   const defaultLanguage = useMemo(
@@ -400,9 +400,9 @@ export function CodingProblemView({
             onSubmit={() => {
               void handleSubmit();
             }}
-            onDryRun={() => {
+            onDryRun={dryRunAllowed ? () => {
               void handleDryRun();
-            }}
+            } : undefined}
           />
           <EditorConsole
             tab={consoleTab}
