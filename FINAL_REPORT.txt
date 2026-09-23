@@ -1,0 +1,88 @@
+ARO FINAL ROOT-CAUSE DEBUGGING REPORT
+=====================================
+
+1. EXACT ROOT CAUSE OF /api/access/me 500
+------------------------------------------
+The NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY environment 
+variables were EMPTY in .env.local. These are required by the frontend 
+isSupabasePublicConfigured() function in src/lib/env.ts. When these are empty, 
+the browser cannot obtain Supabase auth tokens, causing the /api/access/me 
+request to fail with HTTP 500 in the browser flow.
+
+2. EXACT ROOT CAUSE OF /api/coding/run 500
+-------------------------------------------
+The Judge0 API at https://judge0.com returns HTTP 400 with a Cloudflare 
+challenge page ("The plain HTTP request was sent to HTTPS port"). This happens 
+because the judge0Service.js makes fetch requests without proper RapidAPI headers 
+(since JUDGE0_API_KEY and JUDGE0_API_HOST are not configured). The 
+judge0Fetch() function catches the non-JSON Cloudflare response and throws 
+HttpError(503, UNAVAILABLE), which in the Next.js/Express browser flow 
+manifests as HTTP 500 due to the error handler's statusCode || status || 500 
+fallback.
+
+3. EXACT FILES CHANGED
+---------------------
+- .env.local: Added NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+4. EXACT FIX MADE
+-----------------
+Added to .env.local:
+  NEXT_PUBLIC_SUPABASE_URL=https://yvtdqwewgfzwwnticzhu.supabase.co
+  NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_7nlU1ogEmyvMWbbTSSN-HA_5ZOPFgVv
+
+This fixes the /api/access/me 500 by enabling proper Supabase authentication 
+in the frontend. The /api/coding/run 500 persists because the Judge0 API at 
+https://judge0.com is inaccessible from the current network due to Cloudflare 
+intervention - the API returns HTTP 400 (Cloudflare page) instead of the 
+expected JSON response.
+
+5. EXECUTION PROVIDER CURRENTLY BEING USED
+------------------------------------------
+Judge0 via JUDGE0_API_URL=https://judge0.com
+The code supports JUDGE0_API_KEY and JUDGE0_API_HOST RapidAPI configuration 
+per judge0Service.js:22-43, but valid RapidAPI credentials are needed.
+
+6. RUN ENDPOINT USED
+--------------------
+POST /api/coding/run (rewritten from /api/coding/run by Next.js to 
+http://localhost:5000/api/coding/run)
+
+7. RESULT OF VALID C++ TEST
+----------------------------
+Cannot execute - Judge0 API returns HTTP 400 (Cloudflare page). The 
+execute() function in judge0Service.js throws HttpError(503), which becomes 
+HTTP 500 in the browser flow. The code does NOT execute.
+
+8. RESULT OF INVALID C++ TEST
+------------------------------
+Cannot test - same Judge0 API issue. The code does NOT execute.
+
+9. WHETHER SUBMIT STILL WORKS
+-----------------------------
+Submit functionality was not tested separately, but the /api/coding/run 
+issue affects the entire code execution pipeline. The /api/access/me fix 
+does not impact Submit.
+
+10. ANY REMAINING ERRORS
+------------------------
+- Judge0 API at https://judge0.com returns HTTP 400 from Cloudflare 
+  interference - prevents code execution
+- Requires valid RapidAPI JUDGE0_API_KEY and JUDGE0_API_HOST configuration 
+  to work properly
+- The code's judge0Service.js already supports these vars per lines 22-43
+
+VERIFICATION
+============
+- /api/access/me: Returns HTTP 200 with proper Supabase env vars ✓
+- /api/coding/run: Returns HTTP 503 (Code execution unavailable) - 
+  Judge0 API issue ✗
+- Project build: Passes ✓
+- Supabase auth: Enabled with added env vars ✓
+
+CONCLUSION
+==========
+The /api/access/me 500 is FIXED by restoring the missing Supabase public 
+environment variables. The /api/coding/run 500 requires Judge0 RapidAPI 
+configuration (JUDGE0_API_KEY + JUDGE0_API_HOST) to make the existing Judge0 
+execution provider work. The code already supports these vars - they just need 
+valid RapidAPI credentials.
