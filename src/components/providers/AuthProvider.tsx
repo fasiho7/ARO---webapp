@@ -33,6 +33,7 @@ type AuthContextValue = {
     email: string,
     password: string,
   ) => Promise<{ error: string | null }>;
+  signInWithGoogle: (next?: string) => Promise<{ error: string | null }>;
   signUp: (
     input: SignUpInput,
   ) => Promise<{ error: string | null; needsEmailConfirm: boolean }>;
@@ -128,6 +129,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [applyUser],
   );
 
+  const signInWithGoogle = useCallback(
+    async (next?: string) => {
+      if (!isSupabasePublicConfigured()) {
+        return {
+          error:
+            "Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local.",
+        };
+      }
+      const supabase = createBrowserSupabaseClient();
+      const origin = window.location.origin;
+      // Use clean redirect URL without query params to avoid Supabase redirect URL whitelist mismatch
+      const redirectTo = `${origin}/auth/callback`;
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo,
+        },
+      });
+      if (error) {
+        return { error: mapAuthError(error.message) };
+      }
+      return { error: null };
+    },
+    [],
+  );
+
   const signUp = useCallback(
     async (input: SignUpInput) => {
       if (!isSupabasePublicConfigured()) {
@@ -211,6 +238,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       configured,
       signIn,
+      signInWithGoogle,
       signUp,
       signOut,
       refreshProfile,
@@ -222,6 +250,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       configured,
       signIn,
+      signInWithGoogle,
       signUp,
       signOut,
       refreshProfile,

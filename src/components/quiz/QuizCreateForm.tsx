@@ -28,6 +28,8 @@ export function QuizCreateForm() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const [overview, setOverview] = useState<QuizOverview | null>(null);
+  const [step, setStep] = useState<"subject" | "topic">("subject");
+  const [subject, setSubject] = useState<string | null>(null);
   const [topic, setTopic] = useState("all");
   const [subtopic, setSubtopic] = useState("all");
   const [questionCount, setQuestionCount] = useState(10);
@@ -156,34 +158,89 @@ export function QuizCreateForm() {
         title="Configure your coding exam."
         description="Select a topic, problem count, and time limit. Solve real programming challenges directly inside Aro's code editor."
       />
-      <form onSubmit={onSubmit} className="max-w-2xl space-y-6">
-        {error ? (
-          <p className="rounded-[2px] border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
-            {error}
-          </p>
-        ) : null}
+      {error ? (
+        <p className="mb-6 rounded-[2px] border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+          {error}
+        </p>
+      ) : null}
 
-        <fieldset>
-          <legend className="mb-2 font-mono text-[11px] tracking-wide text-muted uppercase">
-            Coding Topic
-          </legend>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {overview?.catalog.topics.map((item) => (
-              <Choice
-                key={item.id}
-                name="topic"
-                checked={topic === item.id}
-                onChange={() => {
-                  setTopic(item.id);
+      {step === "subject" ? (
+        <div className="max-w-2xl space-y-6">
+          <h3 className="font-mono text-[11px] tracking-wide text-muted uppercase">What do you want to practice?</h3>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {[
+              { id: "pf", label: "Programming Fundamentals" },
+              { id: "oop", label: "Object Oriented Programming" },
+              { id: "dsa", label: "Data Structures & Algorithms" },
+            ].map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => {
+                  setSubject(s.id);
+                  const found = overview?.catalog.topics.find((t) => t.id === s.id);
+                  setTopic(found?.id ?? s.id);
                   setSubtopic("all");
+                  setStep("topic");
                 }}
-                label={item.label}
-              />
+                className="rounded-[2px] border border-line bg-surface px-4 py-6 text-center text-base font-medium hover:border-gold/40"
+              >
+                {s.label}
+              </button>
             ))}
           </div>
-        </fieldset>
+          <div className="flex gap-3">
+            <Button href="/quiz" variant="secondary">Cancel</Button>
+          </div>
+        </div>
+      ) : (
+        <form onSubmit={onSubmit} className="max-w-2xl space-y-6">
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="secondary" onClick={() => setStep("subject")}>
+              Back
+            </Button>
+            <span className="text-sm text-muted">Selected subject: {subject?.toUpperCase()}</span>
+          </div>
 
-        {subtopics.length > 0 ? (
+          <fieldset>
+            <legend className="mb-2 font-mono text-[11px] tracking-wide text-muted uppercase">
+              Section / Topic
+            </legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {overview?.catalog.topics
+                .filter((i) => i.id === subject || subject === null)
+                .flatMap((item) => {
+                  if (item.id === subject) {
+                    return item.subtopics.length > 0
+                      ? item.subtopics.map((sub) => ({ id: sub.id, label: sub.label, type: "sub" }))
+                      : [{ id: item.id, label: item.label, type: "topic" }];
+                  }
+                  return [{ id: item.id, label: item.label, type: "topic" }];
+                })
+                .filter((opt, idx, arr) => opt.id !== "all" && arr.findIndex((o) => o.id === opt.id) === idx)
+                .map((opt) => {
+                  const isSelected = subject === null ? topic === opt.id : topic === opt.id || subtopic === opt.id;
+                  return (
+                    <Choice
+                      key={opt.id}
+                      name="topic"
+                      checked={isSelected}
+                      onChange={() => {
+                        if (opt.type === "sub") {
+                          setTopic(subject!);
+                          setSubtopic(opt.id);
+                        } else {
+                          setTopic(opt.id);
+                          setSubtopic("all");
+                        }
+                      }}
+                      label={opt.label}
+                    />
+                  );
+                })}
+            </div>
+          </fieldset>
+
           <label className="block">
             <span className="mb-2 block font-mono text-[11px] tracking-wide text-muted uppercase">
               Subtopic
@@ -201,91 +258,91 @@ export function QuizCreateForm() {
               ))}
             </select>
           </label>
-        ) : null}
 
-        <fieldset>
-          <legend className="mb-2 font-mono text-[11px] tracking-wide text-muted uppercase">
-            Number of coding problems
-          </legend>
-          <div className="flex flex-wrap gap-2">
-            {[5, 10, 15, 20, 30].map((n) => {
-              const locked = lockedCounts.includes(n);
-              return (
+          <fieldset>
+            <legend className="mb-2 font-mono text-[11px] tracking-wide text-muted uppercase">
+              Number of coding problems
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              {[5, 10, 15, 20, 30].map((n) => {
+                const locked = lockedCounts.includes(n);
+                return (
+                  <Choice
+                    key={n}
+                    name="count"
+                    checked={questionCount === n}
+                    disabled={locked}
+                    onChange={() => {
+                      setQuestionCount(n);
+                      setTimeLimit(recommendedTimer(n));
+                    }}
+                    label={`${n} problems`}
+                    badge={locked ? "PRO" : undefined}
+                  />
+                );
+              })}
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend className="mb-2 font-mono text-[11px] tracking-wide text-muted uppercase">
+              Difficulty
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ["easy", "Easy"],
+                  ["medium", "Medium"],
+                  ["hard", "Hard"],
+                  ["mixed", "Mixed"],
+                ] as const
+              ).map(([id, label]) => {
+                const locked = lockedDiffs.includes(id);
+                return (
+                  <Choice
+                    key={id}
+                    name="difficulty"
+                    checked={difficulty === id}
+                    disabled={locked}
+                    onChange={() => setDifficulty(id)}
+                    label={label}
+                    badge={locked ? "PRO" : undefined}
+                  />
+                );
+              })}
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend className="mb-2 font-mono text-[11px] tracking-wide text-muted uppercase">
+              Time Limit
+            </legend>
+            <p className="mb-2 text-sm text-muted">
+              Suggested for {questionCount} problems: {recommendedTimer(questionCount)} minutes.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {(overview?.allowedTimers ?? [5, 10, 15, 20, 30]).map((n) => (
                 <Choice
                   key={n}
-                  name="count"
-                  checked={questionCount === n}
-                  disabled={locked}
-                  onChange={() => {
-                    setQuestionCount(n);
-                    setTimeLimit(recommendedTimer(n));
-                  }}
-                  label={`${n} problems`}
-                  badge={locked ? "PRO" : undefined}
+                  name="timer"
+                  checked={timeLimit === n}
+                  onChange={() => setTimeLimit(n)}
+                  label={`${n} min`}
                 />
-              );
-            })}
-          </div>
-        </fieldset>
+              ))}
+            </div>
+          </fieldset>
 
-        <fieldset>
-          <legend className="mb-2 font-mono text-[11px] tracking-wide text-muted uppercase">
-            Difficulty
-          </legend>
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                ["easy", "Easy"],
-                ["medium", "Medium"],
-                ["hard", "Hard"],
-                ["mixed", "Mixed"],
-              ] as const
-            ).map(([id, label]) => {
-              const locked = lockedDiffs.includes(id);
-              return (
-                <Choice
-                  key={id}
-                  name="difficulty"
-                  checked={difficulty === id}
-                  disabled={locked}
-                  onChange={() => setDifficulty(id)}
-                  label={label}
-                  badge={locked ? "PRO" : undefined}
-                />
-              );
-            })}
+          <div className="flex flex-wrap gap-3">
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "Starting Coding Quiz…" : "Start Coding Quiz"}
+            </Button>
+            <Button href="/quiz" variant="secondary">
+              Cancel
+            </Button>
           </div>
-        </fieldset>
-
-        <fieldset>
-          <legend className="mb-2 font-mono text-[11px] tracking-wide text-muted uppercase">
-            Time Limit
-          </legend>
-          <p className="mb-2 text-sm text-muted">
-            Suggested for {questionCount} problems: {recommendedTimer(questionCount)} minutes.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {(overview?.allowedTimers ?? [5, 10, 15, 20, 30]).map((n) => (
-              <Choice
-                key={n}
-                name="timer"
-                checked={timeLimit === n}
-                onChange={() => setTimeLimit(n)}
-                label={`${n} min`}
-              />
-            ))}
-          </div>
-        </fieldset>
-
-        <div className="flex flex-wrap gap-3">
-          <Button type="submit" disabled={submitting}>
-            {submitting ? "Starting Coding Quiz…" : "Start Coding Quiz"}
-          </Button>
-          <Button href="/quiz" variant="secondary">
-            Cancel
-          </Button>
-        </div>
-      </form>
+        </form>
+      )}
     </div>
   );
 }

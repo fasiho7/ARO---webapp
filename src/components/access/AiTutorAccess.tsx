@@ -3,7 +3,6 @@
 import { useAuth } from "@/components/providers/AuthProvider";
 import { UpgradePrompt } from "@/components/access/UpgradePrompt";
 import { usePlan } from "@/components/access/usePlan";
-import { TutorWorkspace } from "@/components/tutor/TutorWorkspace";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -19,6 +18,8 @@ export function AiTutorAccess() {
     );
   }
 
+  // Temporary Coming Soon for AI Tutor
+  // Keep sign-in and Pro gating messages, but show Coming Soon to authorized users
   if (!user) {
     return (
       <div className="mx-auto max-w-2xl">
@@ -56,5 +57,22 @@ export function AiTutorAccess() {
     );
   }
 
-  return <TutorWorkspace />;
+  return (
+    <div className="mx-auto max-w-2xl">
+      <PageHeader
+        eyebrow="AI Tutor"
+        title="AI Tutor"
+        description="Your personal programming tutor."
+      />
+      <Card className="text-center py-12">
+        <h2 className="display text-3xl mb-3">Coming Soon</h2>
+        <p className="text-muted">
+          The AI Tutor feature is currently in development. We’re building a safe, Pro-only workspace for step-by-step coding help, hints, and debugging. Check back soon.
+        </p>
+        <div className="mt-6">
+          <Button href="/quiz" variant="secondary">Practice Coding Quizzes</Button>
+        </div>
+      </Card>
+    </div>
+  );
 }

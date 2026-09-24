@@ -12,7 +12,7 @@ import { validateLogin } from "@/lib/auth/validation";
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { signIn, configured } = useAuth();
+  const { signIn, signInWithGoogle, configured } = useAuth();
   const next = safeNextPath(searchParams.get("next"));
   const confirmError = searchParams.get("error") === "confirm";
 
@@ -81,6 +81,34 @@ export function LoginForm() {
       />
       <Button type="submit" className="w-full" disabled={pending || !configured} size="lg">
         {pending ? "Signing in…" : "Sign in"}
+      </Button>
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <span className="w-full border-t border-border" />
+        </div>
+        <div className="relative flex justify-center text-xs uppercase">
+          <span className="bg-background px-2 text-muted">or</span>
+        </div>
+      </div>
+      <Button
+        type="button"
+        variant="secondary"
+        className="w-full"
+        disabled={!configured}
+        size="lg"
+        onClick={async () => {
+          const { error } = await signInWithGoogle(next);
+          if (error) {
+            setFormError(error);
+          }
+        }}
+      >
+        <span className="inline-flex items-center gap-2">
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="#EA4335" d="M12 10.2v3.6h5.1c-.2 1.2-1.5 3.6-5.1 3.6-3.1 0-5.6-2.5-5.6-5.6S8.9 6 12 6c1.7 0 2.8.7 3.4 1.3l2.3-2.3C16.5 3.8 14.4 3 12 3 6.9 3 3 6.9 3 12s3.9 9 9 9c5.1 0 8.4-3.5 8.4-8.7 0-.6 0-1.1-.1-1.6H12z"/>
+          </svg>
+          Continue with Google
+        </span>
       </Button>
       <p className="text-center text-xs text-muted">
         New here?{" "}
