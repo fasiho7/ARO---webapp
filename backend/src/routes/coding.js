@@ -4,6 +4,7 @@ const attachPlan = require("../middleware/attachPlan");
 const { HttpError } = require("../utils/httpError");
 const { outputsMatch } = require("../utils/output");
 const { resolveLanguage } = require("../config/languageMap");
+const { serviceSupabase } = require("../config/supabase");
 const {
   MAX_SOURCE_CHARS,
   MAX_STDIN_CHARS,
@@ -283,6 +284,31 @@ codingRouter.post(
 
       const status =
         passedTests === tests.length ? "accepted" : firstFailure;
+
+      // Update coding_progress if accepted and user is authenticated
+      if (status === "accepted" && req.userId && serviceSupabase) {
+        (async () => {
+          try {
+            const { data: existing } = await serviceSupabase
+              .from("coding_progress")
+              .select("completed_ids")
+              .eq("user_id", req.userId)
+              .maybeSingle();
+            const completed = new Set(
+              Array.isArray(existing?.completed_ids) ? existing.completed_ids : []
+            );
+            completed.add(id);
+            await serviceSupabase
+              .from("coding_progress")
+              .upsert(
+                { user_id: req.userId, completed_ids: Array.from(completed) },
+                { onConflict: "user_id" }
+              );
+          } catch {
+            // Non-fatal: progress update failure should not block submission response
+          }
+        })();
+      }
 
       res.json(
         publicSubmitResult({
