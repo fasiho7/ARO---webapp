@@ -66,6 +66,15 @@ function requireExecution() {
   }
 }
 
+function requireJudge0() {
+  if (!isJudge0Configured()) {
+    throw new HttpError(
+      503,
+      "Code execution service is temporarily unavailable. Please try again.",
+    );
+  }
+}
+
 function publicRunResult(result) {
   return {
     success: true,
@@ -211,7 +220,7 @@ codingRouter.post(
 
       for (let index = 0; index < tests.length; index += 1) {
         const test = tests[index];
-        const result = await execute({
+        const result = await judge0Execute({
           language,
           sourceCode,
           stdin: test.input,
