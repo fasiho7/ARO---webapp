@@ -138,9 +138,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
       }
       const supabase = createBrowserSupabaseClient();
-      const origin = window.location.origin;
+      const siteOrigin = process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
       // Use clean redirect URL without query params to avoid Supabase redirect URL whitelist mismatch
-      const redirectTo = `${origin}/auth/callback`;
+      const redirectTo = `${siteOrigin}/auth/callback`;
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
@@ -165,13 +165,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
       }
       const supabase = createBrowserSupabaseClient();
-      const origin = window.location.origin;
+      const siteOrigin = process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
       const { data, error } = await supabase.auth.signUp({
         email: input.email.trim(),
         password: input.password,
         options: {
           data: { full_name: input.fullName.trim() },
-          emailRedirectTo: `${origin}/auth/callback`,
+          emailRedirectTo: `${siteOrigin}/auth/callback`,
         },
       });
       if (error) {
