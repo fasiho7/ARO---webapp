@@ -6,16 +6,38 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 function CallbackContent() {
   const router = useRouter();
-  // After OAuth, redirect to dashboard by default
   const next = "/dashboard";
 
   useEffect(() => {
     const supabase = createBrowserSupabaseClient();
-    const timer = setTimeout(() => {
-      router.replace(next);
-      router.refresh();
-    }, 500);
-    return () => clearTimeout(timer);
+    let cancelled = false;
+
+    const waitForSession = async () => {
+      // Wait for Supabase to exchange the OAuth code and establish session
+      const maxAttempts = 20;
+      for (let i = 0; i < maxAttempts; i++) {
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          if (!cancelled) {
+            router.replace(next);
+            router.refresh();
+          }
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      // Fallback: redirect anyway after timeout
+      if (!cancelled) {
+        router.replace(next);
+        router.refresh();
+      }
+    };
+
+    waitForSession();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router, next]);
 
   return (

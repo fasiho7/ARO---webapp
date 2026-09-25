@@ -1,4 +1,4 @@
-export const DEFAULT_AUTH_REDIRECT = "/";
+export const DEFAULT_AUTH_REDIRECT = "/dashboard";
 
 export const protectedPathPrefixes = [
   "/dashboard",
