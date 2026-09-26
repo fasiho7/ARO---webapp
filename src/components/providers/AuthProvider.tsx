@@ -95,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "INITIAL_SESSION" || cancelled) {
+      if (cancelled) {
         return;
       }
       void applyUser(session?.user ?? null);

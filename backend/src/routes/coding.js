@@ -196,7 +196,7 @@ codingRouter.post(
   executionGuard,
   async (req, res, next) => {
     try {
-      requireJudge0();
+      requireExecution();
       const language = readLanguage(req.body);
       const sourceCode = readSource(req.body);
       const problemId = req.body?.problemId;
@@ -221,7 +221,7 @@ codingRouter.post(
 
       for (let index = 0; index < tests.length; index += 1) {
         const test = tests[index];
-        const result = await judge0Execute({
+        const result = await onlineCompilerExecute({
           language,
           sourceCode,
           stdin: test.input,

@@ -60,6 +60,8 @@ export async function ensureProfile(
   const fullName =
     typeof user.user_metadata?.full_name === "string"
       ? user.user_metadata.full_name.trim()
+      : typeof user.user_metadata?.name === "string"
+      ? user.user_metadata.name.trim()
       : "";
 
   const { data, error } = await supabase
@@ -69,6 +71,7 @@ export async function ensureProfile(
       full_name: fullName || "Learner",
       username: suggestUsername(fullName, user.id),
       email: user.email ?? null,
+      plan: "free",
     })
     .select(PROFILE_COLUMNS)
     .single();
