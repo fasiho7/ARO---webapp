@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Field } from "@/components/auth/Field";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/Button";
@@ -12,8 +12,14 @@ import { validateLogin } from "@/lib/auth/validation";
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { signIn, signInWithGoogle, configured } = useAuth();
+  const { signIn, signInWithGoogle, configured, status } = useAuth();
   const next = safeNextPath(searchParams.get("next"));
+
+  useEffect(() => {
+    if (configured && status === "authenticated") {
+      router.replace("/");
+    }
+  }, [configured, status, router]);
   const confirmError = searchParams.get("error") === "confirm";
 
   const [email, setEmail] = useState("");
