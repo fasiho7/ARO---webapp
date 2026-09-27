@@ -85,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (cancelled) {
         return;
       }
+      console.log("[AuthProvider] getUser initial", { hasError: !!error, userExists: !!data?.user });
       if (error || !data.user) {
         void applyUser(null);
         return;
@@ -98,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (cancelled) {
         return;
       }
+      console.log("[AuthProvider] onAuthStateChange", { event, userExists: !!session?.user, sessionExists: !!session });
       void applyUser(session?.user ?? null);
     });
 

@@ -19,6 +19,8 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse;
   }
 
+  console.log("[proxy] updateSession start", { pathname: request.nextUrl.pathname });
+
   const supabase = createServerClient(
     publicEnv.supabaseUrl,
     publicEnv.supabaseAnonKey,
@@ -44,9 +46,12 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  console.log("[proxy] supabase.auth.getUser", { serverUserExists: !!user, pathname: request.nextUrl.pathname });
+
   const pathname = request.nextUrl.pathname;
 
   if (!user && isProtectedPath(pathname)) {
+    console.log("[proxy] redirect to login", { pathname, protected: isProtectedPath(pathname) });
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";

@@ -8,7 +8,10 @@ export async function GET(request: Request) {
   const code = requestUrl.searchParams.get("code");
   const origin = new URL(request.url).origin;
 
+  console.log("[auth/callback] start", { hasCode: !!code, configured: isSupabasePublicConfigured() });
+
   if (!isSupabasePublicConfigured() || !code) {
+    console.log("[auth/callback] missing config or code, redirecting");
     return NextResponse.redirect(new URL("/", request.url));
   }
 
@@ -29,10 +32,13 @@ export async function GET(request: Request) {
     },
   });
 
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  const { error, data } = await supabase.auth.exchangeCodeForSession(code);
+  console.log("[auth/callback] exchangeCodeForSession", { hasError: !!error, userExists: !!data?.user, sessionExists: !!data?.session });
   if (error) {
+    console.log("[auth/callback] exchange error", { message: error.message });
     return response;
   }
 
+  console.log("[auth/callback] cookies set");
   return response;
 }
