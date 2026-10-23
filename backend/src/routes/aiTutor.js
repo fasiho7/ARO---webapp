@@ -19,6 +19,13 @@ aiTutorRouter.post("/", attachPlan, blockActiveQuizTutor, aiTutorGuard, async (r
     if (message.length > MAX_MESSAGE_CHARS) {
       throw new HttpError(400, "Message is too long.");
     }
+    const conversation = req.body?.conversation;
+    if (conversation !== undefined && !Array.isArray(conversation)) {
+      throw new HttpError(400, "Conversation must be an array.");
+    }
+    if (Array.isArray(conversation) && conversation.length > 64) {
+      throw new HttpError(400, "Conversation is too long.");
+    }
 
     const reply = await completeChat({
       message: message.trim(),

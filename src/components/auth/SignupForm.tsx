@@ -12,7 +12,7 @@ import { validateSignup } from "@/lib/auth/validation";
 export function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { signUp, signInWithGoogle, configured } = useAuth();
+  const { signUp, signInWithGoogle, configured, resendVerification } = useAuth();
   const next = safeNextPath(searchParams.get("next"));
 
   const [fullName, setFullName] = useState("");
@@ -23,6 +23,9 @@ export function SignupForm() {
   const [formError, setFormError] = useState("");
   const [pending, setPending] = useState(false);
   const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
+  const [resendPending, setResendPending] = useState(false);
+  const [resendError, setResendError] = useState("");
+  const [resendSuccess, setResendSuccess] = useState(false);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -58,6 +61,17 @@ export function SignupForm() {
   }
 
   if (needsEmailConfirm) {
+    async function handleResend() {
+      setResendPending(true);
+      setResendError("");
+      const { error } = await resendVerification(email);
+      setResendPending(false);
+      if (error) {
+        setResendError(error);
+        return;
+      }
+      setResendSuccess(true);
+    }
     return (
       <div className="rounded-2xl border border-teal/25 bg-teal/10 px-5 py-6">
         <p className="font-mono text-xs text-teal">Check your inbox</p>
@@ -66,12 +80,29 @@ export function SignupForm() {
           We sent a confirmation link to <span className="text-ink">{email}</span>.
           Open it to finish creating your Aro profile, then sign in.
         </p>
-        <Link
-          href={`/login?next=${encodeURIComponent(next)}`}
-          className="mt-5 inline-flex text-sm font-semibold text-teal"
-        >
-          Back to sign in
-        </Link>
+        {resendError ? (
+          <p className="mt-3 text-sm text-danger">{resendError}</p>
+        ) : null}
+        {resendSuccess ? (
+          <p className="mt-3 text-sm text-teal">Verification email resent. Check your inbox.</p>
+        ) : null}
+        <div className="mt-4 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleResend}
+            disabled={resendPending}
+            className="inline-flex text-sm font-semibold text-teal hover:underline"
+          >
+            {resendPending ? "Resending…" : "Resend verification email"}
+          </button>
+          <span className="text-muted">•</span>
+          <Link
+            href={`/login?next=${encodeURIComponent(next)}`}
+            className="inline-flex text-sm font-semibold text-teal"
+          >
+            Back to sign in
+          </Link>
+        </div>
       </div>
     );
   }

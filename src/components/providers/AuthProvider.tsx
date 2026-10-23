@@ -40,6 +40,7 @@ type AuthContextValue = {
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   updateProfile: (patch: ProfilePatch) => Promise<{ error: string | null }>;
+  resendVerification: (email: string) => Promise<{ error: string | null }>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -64,6 +65,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(nextUser);
       setProfile(null);
       setStatus("authenticated");
+      return;
+    }
+    const provider = nextUser.app_metadata?.provider;
+    const isEmailProvider = provider === "email";
+    const isEmailVerified = !!nextUser.email_confirmed_at;
+    if (isEmailProvider && !isEmailVerified) {
+      setUser(null);
+      setProfile(null);
+      setStatus("unauthenticated");
+      const supabase = createBrowserSupabaseClient();
+      await supabase.auth.signOut().catch(() => {});
       return;
     }
     const supabase = createBrowserSupabaseClient();
@@ -125,7 +137,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error) {
         return { error: mapAuthError(error.message) };
       }
-      await applyUser(data.user);
+      const user = data.user;
+      const provider = user?.app_metadata?.provider;
+      const isEmailProvider = provider === "email";
+      const isEmailVerified = !!user?.email_confirmed_at;
+      if (isEmailProvider && !isEmailVerified) {
+        await supabase.auth.signOut().catch(() => {});
+        return {
+          error:
+            "Please verify your email before signing in. Check your inbox for the verification link.",
+        };
+      }
+      await applyUser(user);
       return { error: null };
     },
     [applyUser],
@@ -200,6 +223,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.refresh();
   }, [router]);
 
+  const resendVerification = useCallback(async (email: string) => {
+    if (!isSupabasePublicConfigured()) {
+      return { error: "Supabase is not configured." };
+    }
+    const supabase = createBrowserSupabaseClient();
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: email.trim(),
+    });
+    if (error) {
+      return { error: mapAuthError(error.message) };
+    }
+    return { error: null };
+  }, []);
 
   const refreshProfile = useCallback(async () => {
     if (!user || !isSupabasePublicConfigured()) {
@@ -245,6 +282,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       refreshProfile,
       updateProfile,
+      resendVerification,
     }),
     [
       status,
@@ -257,6 +295,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       refreshProfile,
       updateProfile,
+      resendVerification,
     ],
   );
 
